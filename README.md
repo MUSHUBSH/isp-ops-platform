@@ -10,6 +10,8 @@ Este repositorio nace como monorepo API-first:
 - `packages/contracts`: contrato OpenAPI.
 - `docs`: decisiones de arquitectura y modelo.
 
+Estado: prototipo operativo local para documentacion, IPAM, inventario, topologia y NOC.
+
 ## Principios
 
 - La red se modela como relaciones operativas, no como inventario plano.
