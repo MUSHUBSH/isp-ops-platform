@@ -2537,6 +2537,9 @@ function RacksPowerView({
   const [rackForm, setRackForm] = useState({ code: "", name: "", heightU: "45" });
   const [powerForm, setPowerForm] = useState({ name: "", capacityWatts: "", loadWatts: "", source: "" });
   const [assetForm, setAssetForm] = useState({ name: "", assetType: "ups", capacityWatts: "", loadWatts: "", autonomyMinutes: "", batteryHealthPercent: "", sourceFeedId: "", notes: "" });
+  const [selectedPowerAssetId, setSelectedPowerAssetId] = useState(sitePowerAssets[0]?.id ?? "");
+  const selectedPowerAsset = sitePowerAssets.find((asset) => asset.id === selectedPowerAssetId);
+  const [assetEditForm, setAssetEditForm] = useState({ name: "", assetType: "ups", status: "active", capacityWatts: "", loadWatts: "", autonomyMinutes: "", batteryHealthPercent: "", sourceFeedId: "", notes: "" });
   const [placementForm, setPlacementForm] = useState({ deviceId: "", rackId: siteRacks[0]?.id ?? "", positionU: "", heightU: "1", powerFeedId: "" });
   const [crudState, setCrudState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const selectedRack = siteRacks.find((rack) => rack.id === selectedRackId) ?? siteRacks[0];
@@ -2554,6 +2557,29 @@ function RacksPowerView({
       setPlacementForm((current) => ({ ...current, rackId: nextRackId, deviceId: "", powerFeedId: "" }));
     }
   }, [activeSiteCode, selectedRackId, siteRacks]);
+
+  useEffect(() => {
+    const currentAssetBelongsToSite = sitePowerAssets.some((asset) => asset.id === selectedPowerAssetId);
+    if (!currentAssetBelongsToSite) {
+      setSelectedPowerAssetId(sitePowerAssets[0]?.id ?? "");
+    }
+  }, [selectedPowerAssetId, sitePowerAssets]);
+
+  useEffect(() => {
+    if (selectedPowerAsset) {
+      setAssetEditForm({
+        name: selectedPowerAsset.name,
+        assetType: selectedPowerAsset.assetType,
+        status: selectedPowerAsset.status,
+        capacityWatts: selectedPowerAsset.capacityWatts ? String(selectedPowerAsset.capacityWatts) : "",
+        loadWatts: selectedPowerAsset.loadWatts ? String(selectedPowerAsset.loadWatts) : "",
+        autonomyMinutes: selectedPowerAsset.autonomyMinutes ? String(selectedPowerAsset.autonomyMinutes) : "",
+        batteryHealthPercent: selectedPowerAsset.batteryHealthPercent ? String(selectedPowerAsset.batteryHealthPercent) : "",
+        sourceFeedId: "",
+        notes: selectedPowerAsset.notes ?? ""
+      });
+    }
+  }, [selectedPowerAsset]);
 
   async function createRack(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2630,6 +2656,44 @@ function RacksPowerView({
         reason: "Alta desde vista energia avanzada"
       });
       setAssetForm({ name: "", assetType: "ups", capacityWatts: "", loadWatts: "", autonomyMinutes: "", batteryHealthPercent: "", sourceFeedId: "", notes: "" });
+      await onReload();
+      setCrudState("saved");
+    } catch {
+      setCrudState("error");
+    }
+  }
+
+  async function updatePowerAsset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPowerAsset) return;
+    setCrudState("saving");
+
+    try {
+      await apiPatch(`/sites/${activeSiteCode}/power-assets/${selectedPowerAsset.id}`, {
+        name: assetEditForm.name,
+        assetType: assetEditForm.assetType,
+        status: assetEditForm.status,
+        capacityWatts: assetEditForm.capacityWatts ? Number(assetEditForm.capacityWatts) : null,
+        loadWatts: assetEditForm.loadWatts ? Number(assetEditForm.loadWatts) : null,
+        autonomyMinutes: assetEditForm.autonomyMinutes ? Number(assetEditForm.autonomyMinutes) : null,
+        batteryHealthPercent: assetEditForm.batteryHealthPercent ? Number(assetEditForm.batteryHealthPercent) : null,
+        sourceFeedId: assetEditForm.sourceFeedId || null,
+        notes: assetEditForm.notes || null,
+        reason: "Edicion de activo electrico desde vista de racks"
+      });
+      await onReload();
+      setCrudState("saved");
+    } catch {
+      setCrudState("error");
+    }
+  }
+
+  async function deletePowerAsset(id: string) {
+    setCrudState("saving");
+
+    try {
+      await apiDelete(`/sites/${activeSiteCode}/power-assets/${id}`);
+      setSelectedPowerAssetId("");
       await onReload();
       setCrudState("saved");
     } catch {
@@ -2755,18 +2819,42 @@ function RacksPowerView({
           <div className="powerAssetList">
             <p className="eyebrow">Activos electricos</p>
             {sitePowerAssets.map((asset) => (
-              <article key={asset.id}>
-                <div>
+              <article className={selectedPowerAsset?.id === asset.id ? "selectedMiniItem" : ""} key={asset.id}>
+                <button className="miniListButton" onClick={() => setSelectedPowerAssetId(asset.id)} type="button">
                   <strong>{asset.name}</strong>
                   <span>{asset.assetType} - {asset.sourceFeed ?? "sin feed"}</span>
-                </div>
-                <small className={`statusText ${asset.status}`}>{asset.status}</small>
-                <em>{asset.loadWatts ?? 0}W / {asset.capacityWatts ?? 0}W</em>
-                <em>Autonomia {asset.autonomyMinutes ?? 0} min - bateria {asset.batteryHealthPercent ?? 0}%</em>
+                  <small className={`statusText ${asset.status}`}>{asset.status}</small>
+                  <em>{asset.loadWatts ?? 0}W / {asset.capacityWatts ?? 0}W</em>
+                  <em>Autonomia {asset.autonomyMinutes ?? 0} min - bateria {asset.batteryHealthPercent ?? 0}%</em>
+                </button>
+                <button className="smallDanger" onClick={() => void deletePowerAsset(asset.id)} type="button">Eliminar</button>
               </article>
             ))}
             {sitePowerAssets.length === 0 && <span className="mutedText">Sin activos electricos registrados en esta sede</span>}
           </div>
+          {selectedPowerAsset && (
+            <form className="quickForm" onSubmit={updatePowerAsset}>
+              <p className="eyebrow">Editar activo electrico</p>
+              <label>Nombre<input onChange={(event) => setAssetEditForm((current) => ({ ...current, name: event.target.value }))} value={assetEditForm.name} /></label>
+              <label>Tipo<select onChange={(event) => setAssetEditForm((current) => ({ ...current, assetType: event.target.value }))} value={assetEditForm.assetType}>
+                <option value="ups">UPS</option><option value="rectifier">Rectificador</option><option value="battery_bank">Baterias</option><option value="pdu">PDU</option><option value="generator">Generador</option>
+              </select></label>
+              <label>Estado<select onChange={(event) => setAssetEditForm((current) => ({ ...current, status: event.target.value }))} value={assetEditForm.status}>
+                <option value="active">active</option><option value="degraded">degraded</option><option value="maintenance">maintenance</option><option value="down">down</option><option value="planned">planned</option>
+              </select></label>
+              <label>Capacidad W<input inputMode="numeric" onChange={(event) => setAssetEditForm((current) => ({ ...current, capacityWatts: event.target.value }))} value={assetEditForm.capacityWatts} /></label>
+              <label>Carga W<input inputMode="numeric" onChange={(event) => setAssetEditForm((current) => ({ ...current, loadWatts: event.target.value }))} value={assetEditForm.loadWatts} /></label>
+              <label>Autonomia min<input inputMode="numeric" onChange={(event) => setAssetEditForm((current) => ({ ...current, autonomyMinutes: event.target.value }))} value={assetEditForm.autonomyMinutes} /></label>
+              <label>Salud bateria %<input inputMode="numeric" onChange={(event) => setAssetEditForm((current) => ({ ...current, batteryHealthPercent: event.target.value }))} value={assetEditForm.batteryHealthPercent} /></label>
+              <label className="wideField">Feed<select onChange={(event) => setAssetEditForm((current) => ({ ...current, sourceFeedId: event.target.value }))} value={assetEditForm.sourceFeedId}>
+                <option value="">Sin cambio / sin feed</option>
+                {sitePowerFeeds.map((feed) => <option key={feed.id} value={feed.id}>{feed.name}</option>)}
+              </select></label>
+              <label className="wideField">Notas<input onChange={(event) => setAssetEditForm((current) => ({ ...current, notes: event.target.value }))} value={assetEditForm.notes} /></label>
+              <button type="submit">Guardar activo</button>
+              <span className={`formState ${crudState}`}>{formStateLabel(crudState)}</span>
+            </form>
+          )}
           <form className="quickForm" onSubmit={createPowerAsset}>
             <p className="eyebrow">Nuevo activo electrico</p>
             <label>Nombre<input onChange={(event) => setAssetForm((current) => ({ ...current, name: event.target.value }))} value={assetForm.name} /></label>

@@ -13,6 +13,7 @@ import {
   deleteDeviceInDb,
   deleteInterfaceInDb,
   deleteInterfaceLinkInDb,
+  deletePowerAssetInDb,
   deletePowerFeedInDb,
   deleteRackInDb,
   listDeviceModelsFromDb,
@@ -26,6 +27,7 @@ import {
   updateDeviceInDb,
   updateInterfaceInDb,
   updateInterfaceLinkInDb,
+  updatePowerAssetInDb,
   updatePowerFeedInDb,
   updateRackInDb,
   updateDevicePlacementInDb,
@@ -97,6 +99,10 @@ const createPowerAssetSchema = z.object({
   batteryHealthPercent: z.number().int().min(0).max(100).nullable().optional(),
   sourceFeedId: z.string().uuid().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
+  reason: z.string().max(500).nullable().optional()
+});
+
+const updatePowerAssetSchema = createPowerAssetSchema.partial().omit({ reason: true }).extend({
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -248,6 +254,51 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ asset });
+  });
+
+  app.patch("/sites/:code/power-assets/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updatePowerAssetSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid power asset payload", issues: parsed.error.issues });
+    }
+
+    const asset = await updatePowerAssetInDb({ id, ...parsed.data });
+
+    if (!asset) {
+      return reply.code(404).send({ message: "Power asset not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "power_asset.updated",
+      objectType: "power_asset",
+      objectId: asset.id,
+      afterData: asset,
+      reason: parsed.data.reason ?? "Actualizacion de activo electrico"
+    });
+
+    return { asset };
+  });
+
+  app.delete("/sites/:code/power-assets/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const deleted = await deletePowerAssetInDb(id);
+
+    if (!deleted) {
+      return reply.code(404).send({ message: "Power asset not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "power_asset.deleted",
+      objectType: "power_asset",
+      objectId: deleted.id,
+      reason: "Eliminacion de activo electrico"
+    });
+
+    return { deleted };
   });
 
   app.post("/sites/:code/power-feeds", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {

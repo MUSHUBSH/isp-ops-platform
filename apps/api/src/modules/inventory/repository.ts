@@ -199,6 +199,19 @@ export type CreatePowerAssetInput = {
   notes?: string | null;
 };
 
+export type UpdatePowerAssetInput = {
+  id: string;
+  name?: string;
+  assetType?: string;
+  status?: string;
+  capacityWatts?: number | null;
+  loadWatts?: number | null;
+  autonomyMinutes?: number | null;
+  batteryHealthPercent?: number | null;
+  sourceFeedId?: string | null;
+  notes?: string | null;
+};
+
 export type UpdateDevicePlacementInput = {
   id: string;
   rackId: string;
@@ -694,6 +707,58 @@ export async function createPowerAssetInDb(input: CreatePowerAssetInput) {
   );
 
   return row ? mapPowerAsset(row) : null;
+}
+
+export async function updatePowerAssetInDb(input: UpdatePowerAssetInput) {
+  const row = await queryOne<PowerAssetRow>(
+    `UPDATE power_assets pa
+     SET name = COALESCE($2, name),
+         asset_type = COALESCE($3, asset_type),
+         status = COALESCE($4, status),
+         capacity_watts = $5,
+         load_watts = $6,
+         autonomy_minutes = $7,
+         battery_health_percent = $8,
+         source_feed_id = $9::uuid,
+         notes = COALESCE($10, notes)
+     WHERE pa.id = $1::uuid
+     RETURNING id,
+       (SELECT code FROM sites WHERE id = site_id) AS site_code,
+       name,
+       asset_type,
+       status,
+       capacity_watts,
+       load_watts,
+       autonomy_minutes,
+       battery_health_percent,
+       (SELECT name FROM power_feeds WHERE id = source_feed_id) AS source_feed,
+       notes`,
+    [
+      input.id,
+      input.name ?? null,
+      input.assetType ?? null,
+      input.status ?? null,
+      input.capacityWatts ?? null,
+      input.loadWatts ?? null,
+      input.autonomyMinutes ?? null,
+      input.batteryHealthPercent ?? null,
+      input.sourceFeedId ?? null,
+      input.notes ?? null
+    ]
+  );
+
+  return row ? mapPowerAsset(row) : null;
+}
+
+export async function deletePowerAssetInDb(id: string) {
+  const row = await queryOne<{ id: string }>(
+    `DELETE FROM power_assets
+     WHERE id = $1::uuid
+     RETURNING id`,
+    [id]
+  );
+
+  return row ?? null;
 }
 
 export async function createRackInDb(input: CreateRackInput) {

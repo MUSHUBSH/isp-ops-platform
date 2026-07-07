@@ -1680,6 +1680,11 @@ h2 {
   padding: 11px;
 }
 
+.powerAssetList article.selectedMiniItem {
+  border-color: #3bcda6;
+  background: #0f2425;
+}
+
 .powerFeedList article > div:first-child,
 .powerAssetList article > div:first-child {
   display: grid;
