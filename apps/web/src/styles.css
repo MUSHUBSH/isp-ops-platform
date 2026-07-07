@@ -1310,6 +1310,10 @@ h2 {
   align-content: start;
 }
 
+.interfaceLinkPanel {
+  grid-column: span 2;
+}
+
 .deviceList {
   display: grid;
   gap: 8px;
@@ -1830,6 +1834,10 @@ h2 {
 
   .healthScore {
     text-align: left;
+  }
+
+  .interfaceLinkPanel {
+    grid-column: 1 / -1;
   }
 
   .incidentWorkbench,

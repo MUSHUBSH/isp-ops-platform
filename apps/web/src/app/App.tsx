@@ -35,6 +35,7 @@ import type {
   FiberStrand,
   Incident,
   IncidentEvent,
+  InterfaceLink,
   IpAssignment,
   MaintenanceWindow,
   NetworkInterface,
@@ -200,7 +201,7 @@ export function App() {
         {activeModule === "map" && <NetworkMapView siteMap={data.siteMap} />}
         {activeModule === "racks" && <RacksPowerView devices={data.devices} onReload={data.reload} powerAssets={data.powerAssets} racks={data.racks} powerFeeds={data.powerFeeds} sites={data.sites} />}
         {activeModule === "devices" && <DevicesView devices={data.devices} onReload={data.reload} sites={data.sites} />}
-        {activeModule === "interfaces" && <InterfacesView devices={data.devices} interfaces={data.interfaces} onReload={data.reload} />}
+        {activeModule === "interfaces" && <InterfacesView circuits={data.circuits} devices={data.devices} interfaceLinks={data.interfaceLinks} interfaces={data.interfaces} onReload={data.reload} />}
         {activeModule === "datacenter" && <DatacenterView assets={data.datacenterAssets} capacities={data.providerCapacities} fiberSpans={data.fiberSpans} fiberStrands={data.fiberStrands} onReload={data.reload} patchcords={data.patchcords} transceivers={data.transceivers} />}
         {activeModule === "circuits" && (
           <CircuitsView
@@ -2932,12 +2933,28 @@ function DeviceStatusSelect({ onChange, value }: { onChange: (value: string) => 
   );
 }
 
-function InterfacesView({ devices, interfaces, onReload }: { devices: Device[]; interfaces: NetworkInterface[]; onReload: () => Promise<void> }) {
+function InterfacesView({
+  circuits,
+  devices,
+  interfaceLinks,
+  interfaces,
+  onReload
+}: {
+  circuits: Circuit[];
+  devices: Device[];
+  interfaceLinks: InterfaceLink[];
+  interfaces: NetworkInterface[];
+  onReload: () => Promise<void>;
+}) {
   const [interfaceForm, setInterfaceForm] = useState({ deviceName: devices[0]?.name ?? "", name: "", interfaceType: "ethernet", status: "unknown", speedMbps: "", description: "" });
   const [selectedInterfaceId, setSelectedInterfaceId] = useState(interfaces[0]?.id ?? "");
   const selectedInterface = interfaces.find((item) => item.id === selectedInterfaceId) ?? interfaces[0];
   const [editForm, setEditForm] = useState({ name: selectedInterface?.name ?? "", interfaceType: selectedInterface?.type ?? "ethernet", status: selectedInterface?.status ?? "unknown", speedMbps: selectedInterface?.speedMbps ? String(selectedInterface.speedMbps) : "", description: selectedInterface?.description ?? "" });
+  const [linkForm, setLinkForm] = useState({ aInterfaceId: interfaces[0]?.id ?? "", bInterfaceId: interfaces[1]?.id ?? "", circuitCode: "", linkType: "patchcord", status: "active", capacityMbps: "" });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const linksForSelected = selectedInterface
+    ? interfaceLinks.filter((link) => link.aInterfaceId === selectedInterface.id || link.bInterfaceId === selectedInterface.id)
+    : [];
 
   useEffect(() => {
     if (selectedInterface) {
@@ -2950,6 +2967,13 @@ function InterfacesView({ devices, interfaces, onReload }: { devices: Device[]; 
       });
     }
   }, [selectedInterface]);
+
+  useEffect(() => {
+    if (selectedInterface && linkForm.aInterfaceId !== selectedInterface.id) {
+      const nextPeer = interfaces.find((item) => item.id !== selectedInterface.id)?.id ?? "";
+      setLinkForm((current) => ({ ...current, aInterfaceId: selectedInterface.id, bInterfaceId: current.bInterfaceId && current.bInterfaceId !== selectedInterface.id ? current.bInterfaceId : nextPeer }));
+    }
+  }, [interfaces, linkForm.aInterfaceId, selectedInterface]);
 
   async function createInterface(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3001,6 +3025,33 @@ function InterfacesView({ devices, interfaces, onReload }: { devices: Device[]; 
     try {
       await apiDelete(`/inventory/interfaces/${selectedInterface.id}`);
       setSelectedInterfaceId("");
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function createInterfaceLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!linkForm.aInterfaceId || !linkForm.bInterfaceId || linkForm.aInterfaceId === linkForm.bInterfaceId) {
+      setFormState("error");
+      return;
+    }
+
+    setFormState("saving");
+
+    try {
+      await apiPost("/inventory/interface-links", {
+        aInterfaceId: linkForm.aInterfaceId,
+        bInterfaceId: linkForm.bInterfaceId,
+        circuitCode: linkForm.circuitCode || null,
+        linkType: linkForm.linkType,
+        status: linkForm.status,
+        capacityMbps: linkForm.capacityMbps ? Number(linkForm.capacityMbps) : null,
+        reason: "Alta de enlace puerto a puerto desde modulo Interfaces"
+      });
+      setLinkForm((current) => ({ ...current, circuitCode: "", capacityMbps: "" }));
       await onReload();
       setFormState("saved");
     } catch {
@@ -3069,6 +3120,58 @@ function InterfacesView({ devices, interfaces, onReload }: { devices: Device[]; 
           ) : (
             <span className="mutedText">Sin interfaz seleccionada</span>
           )}
+        </div>
+        <div className="panel interfaceLinkPanel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">Conexiones</p>
+              <h2>Puerto a puerto</h2>
+            </div>
+          </div>
+          <div className="miniList">
+            {linksForSelected.map((link) => {
+              const peerId = link.aInterfaceId === selectedInterface?.id ? link.bInterfaceId : link.aInterfaceId;
+              const peer = interfaces.find((item) => item.id === peerId);
+              return (
+                <article key={link.id}>
+                  <strong>{link.aDevice} / {link.bDevice}</strong>
+                  <span>{peer ? `${peer.device} ${peer.name} / ${peer.siteCode}` : "interfaz remota"} - {link.circuitCode ?? "sin circuito"}</span>
+                  <small className={`statusText ${link.status}`}>{link.status} / {link.capacityMbps ? `${link.capacityMbps} Mbps` : "sin capacidad"}</small>
+                </article>
+              );
+            })}
+            {linksForSelected.length === 0 && <span className="mutedText">Sin enlaces documentados para la interfaz seleccionada</span>}
+          </div>
+          <form className="quickForm" onSubmit={createInterfaceLink}>
+            <p className="eyebrow">Nuevo enlace</p>
+            <label className="wideField">Interfaz A<select onChange={(event) => setLinkForm((current) => ({ ...current, aInterfaceId: event.target.value }))} value={linkForm.aInterfaceId}>
+              {interfaces.map((item) => <option key={item.id} value={item.id}>{item.device} {item.name} - {item.siteCode}</option>)}
+            </select></label>
+            <label className="wideField">Interfaz B<select onChange={(event) => setLinkForm((current) => ({ ...current, bInterfaceId: event.target.value }))} value={linkForm.bInterfaceId}>
+              {interfaces.map((item) => <option disabled={item.id === linkForm.aInterfaceId} key={item.id} value={item.id}>{item.device} {item.name} - {item.siteCode}</option>)}
+            </select></label>
+            <label>Tipo<select onChange={(event) => setLinkForm((current) => ({ ...current, linkType: event.target.value }))} value={linkForm.linkType}>
+              <option value="patchcord">patchcord</option>
+              <option value="uplink">uplink</option>
+              <option value="transport">transport</option>
+              <option value="pon">pon</option>
+              <option value="radio">radio</option>
+              <option value="logical">logical</option>
+            </select></label>
+            <label>Estado<select onChange={(event) => setLinkForm((current) => ({ ...current, status: event.target.value }))} value={linkForm.status}>
+              <option value="active">active</option>
+              <option value="degraded">degraded</option>
+              <option value="down">down</option>
+              <option value="planned">planned</option>
+            </select></label>
+            <label>Circuito<select onChange={(event) => setLinkForm((current) => ({ ...current, circuitCode: event.target.value }))} value={linkForm.circuitCode}>
+              <option value="">Sin circuito</option>
+              {circuits.map((circuit) => <option key={circuit.id} value={circuit.code}>{circuit.code}</option>)}
+            </select></label>
+            <label>Mbps<input inputMode="numeric" onChange={(event) => setLinkForm((current) => ({ ...current, capacityMbps: event.target.value }))} value={linkForm.capacityMbps} /></label>
+            <button disabled={!linkForm.aInterfaceId || !linkForm.bInterfaceId || linkForm.aInterfaceId === linkForm.bInterfaceId} type="submit">Crear enlace</button>
+            <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+          </form>
         </div>
       </section>
     </ModulePage>
