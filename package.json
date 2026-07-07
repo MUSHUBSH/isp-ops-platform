@@ -1,0 +1,22 @@
+{
+  "name": "isp-ops-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ERP tecnico interno para operacion ISP multisede.",
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "dev": "pnpm --parallel --filter @ispops/web --filter @ispops/api dev",
+    "lint": "pnpm --recursive lint",
+    "typecheck": "pnpm --recursive typecheck",
+    "dev:local": "powershell -ExecutionPolicy Bypass -File ./scripts/local-dev.ps1",
+    "db:health": "powershell -ExecutionPolicy Bypass -File ./scripts/db-health.ps1",
+    "db:reset": "powershell -ExecutionPolicy Bypass -File ./scripts/db-reset.ps1",
+    "db:psql": "docker compose exec postgres psql -U ispops -d ispops",
+    "db:backup": "powershell -ExecutionPolicy Bypass -File ./scripts/db-backup.ps1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.0.0"
+}

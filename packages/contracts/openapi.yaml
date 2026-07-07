@@ -1,0 +1,1080 @@
+openapi: 3.1.0
+info:
+  title: ISP Ops Platform API
+  version: 0.1.0
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: API is healthy
+  /identity/me:
+    get:
+      summary: Current authenticated user
+      responses:
+        "200":
+          description: Current user or null
+  /identity/roles:
+    get:
+      summary: List roles and permissions
+      responses:
+        "200":
+          description: Role list
+  /identity/permissions:
+    get:
+      summary: List permissions
+      responses:
+        "200":
+          description: Permission list
+  /noc/summary:
+    get:
+      summary: NOC operational summary
+      responses:
+        "200":
+          description: Current network operations summary
+  /noc/workbench:
+    get:
+      summary: NOC summary plus priority alerts
+      responses:
+        "200":
+          description: NOC workbench payload
+  /search:
+    get:
+      summary: Global search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+  /providers:
+    get:
+      summary: List providers
+      responses:
+        "200":
+          description: Provider list
+    post:
+      summary: Create provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, providerType]
+              properties:
+                code:
+                  type: string
+                name:
+                  type: string
+                providerType:
+                  type: string
+                nocEmail:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Provider created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /providers/{id}:
+    get:
+      summary: Provider detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Provider with related contracts
+        "404":
+          description: Provider not found
+  /sites:
+    get:
+      summary: List sites
+      responses:
+        "200":
+          description: Site list
+    post:
+      summary: Create site
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, siteType]
+              properties:
+                code:
+                  type: string
+                name:
+                  type: string
+                siteType:
+                  type: string
+                status:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Site created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /sites/map:
+    get:
+      summary: Site transport map
+      responses:
+        "200":
+          description: Mapped sites and site-to-site transport links
+  /sites/map/import:
+    post:
+      summary: Preview or apply bulk map import
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preview:
+                  type: boolean
+                sites:
+                  type: array
+                links:
+                  type: array
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Import preview
+        "201":
+          description: Import applied
+        "207":
+          description: Import partially applied
+        "400":
+          description: Invalid payload
+  /sites/transport-links:
+    post:
+      summary: Create or update a site-to-site transport link
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aSiteCode, zSiteCode]
+              properties:
+                aSiteCode:
+                  type: string
+                zSiteCode:
+                  type: string
+                providerCode:
+                  type: string
+                circuitCode:
+                  type: string
+                linkType:
+                  type: string
+                status:
+                  type: string
+                capacityMbps:
+                  type: integer
+                label:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Transport link created or updated
+        "400":
+          description: Invalid payload
+        "404":
+          description: Sites not found or PostgreSQL required
+  /sites/{code}/downstream-impact:
+    get:
+      summary: Site downstream impact
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Downstream impacted sites
+        "503":
+          description: PostgreSQL required
+  /sites/{code}/operational-view:
+    get:
+      summary: Site operational context
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Site inventory, prefixes and circuits
+        "404":
+          description: Site not found
+  /sites/{code}/location:
+    patch:
+      summary: Update site map coordinates
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                address:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Location updated
+        "400":
+          description: Invalid payload
+        "404":
+          description: Site not found or PostgreSQL required
+  /ipam/prefixes:
+    get:
+      summary: List prefixes
+      responses:
+        "200":
+          description: Prefix list
+    post:
+      summary: Create prefix
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prefix, family, role]
+              properties:
+                prefix:
+                  type: string
+                family:
+                  type: integer
+                  enum: [4, 6]
+                role:
+                  type: string
+                siteCode:
+                  type: string
+                vrf:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Prefix created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /ipam/addresses:
+    get:
+      summary: List IP assignments with device, interface, site and service context
+      responses:
+        "200":
+          description: IP assignment list
+    post:
+      summary: Create IP address assignment with optional interface context
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, prefix, role]
+              properties:
+                address:
+                  type: string
+                prefix:
+                  type: string
+                role:
+                  type: string
+                interfaceId:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: IP address created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required and prefix must exist
+  /ipam/debt:
+    get:
+      summary: IPAM documentation debt
+      responses:
+        "200":
+          description: Undocumented IPs and risky prefixes
+  /incidents:
+    get:
+      summary: List operational incidents
+      responses:
+        "200":
+          description: Incident list
+    post:
+      summary: Create operational incident
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "201":
+          description: Incident created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /incidents/{code}:
+    get:
+      summary: Incident detail
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Incident with events and impacts
+        "404":
+          description: Incident not found
+  /incidents/{code}/events:
+    post:
+      summary: Add incident timeline event
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "201":
+          description: Incident event created
+        "400":
+          description: Invalid payload
+        "404":
+          description: Incident not found
+  /sites/{code}/racks:
+    get:
+      summary: List site racks with mounted devices
+      responses:
+        "200":
+          description: Rack list
+    post:
+      summary: Create rack in site
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "201":
+          description: Rack created
+  /sites/{code}/racks/{id}:
+    patch:
+      summary: Update rack
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Rack updated
+    delete:
+      summary: Delete empty rack
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Rack deleted
+        "409":
+          description: Rack has mounted devices
+  /sites/{code}/power:
+    get:
+      summary: List site power feeds
+      responses:
+        "200":
+          description: Power feed list
+  /sites/{code}/power-assets:
+    get:
+      summary: List electrical assets for a site including UPS, rectifiers, battery banks, PDUs and generators
+      responses:
+        "200":
+          description: Power asset list
+    post:
+      summary: Create electrical asset for a site
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "201":
+          description: Power asset created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /sites/{code}/power-feeds:
+    post:
+      summary: Create site power feed
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "201":
+          description: Power feed created
+  /sites/{code}/power-feeds/{id}:
+    patch:
+      summary: Update power feed
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Power feed updated
+    delete:
+      summary: Delete unused power feed
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Power feed deleted
+        "409":
+          description: Power feed is assigned to devices
+  /inventory/devices:
+    get:
+      summary: List devices
+      responses:
+        "200":
+          description: Device inventory
+    post:
+      summary: Create device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteCode, name]
+              properties:
+                siteCode:
+                  type: string
+                name:
+                  type: string
+                roleCode:
+                  type: string
+                managementIp:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Device created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /inventory/devices/{id}:
+    patch:
+      summary: Update device operational metadata
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Device updated
+        "400":
+          description: Invalid payload
+        "404":
+          description: Device not found
+    delete:
+      summary: Delete device only when it has no operational dependencies
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Device deleted
+        "409":
+          description: Device has interfaces, backups, incidents, documents or evidence
+  /inventory/devices/{id}/placement:
+    patch:
+      summary: Mount or move a device into a rack RU position and assign power feed
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rackId, positionU, heightU]
+              properties:
+                rackId:
+                  type: string
+                  format: uuid
+                positionU:
+                  type: integer
+                heightU:
+                  type: integer
+                powerFeedId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Device placement updated
+        "400":
+          description: Invalid payload
+        "409":
+          description: Invalid rack/feed, RU overlap, or PostgreSQL required
+  /inventory/interfaces:
+    get:
+      summary: List interfaces
+      responses:
+        "200":
+          description: Interface inventory
+    post:
+      summary: Create interface
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceName, name, interfaceType]
+              properties:
+                deviceName:
+                  type: string
+                name:
+                  type: string
+                interfaceType:
+                  type: string
+                speedMbps:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Interface created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /inventory/interfaces/{id}:
+    patch:
+      summary: Update interface operational metadata
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Interface updated
+        "400":
+          description: Invalid payload
+        "404":
+          description: Interface not found
+    delete:
+      summary: Delete interface only when it has no IPs, links or circuit endpoints
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Interface deleted
+        "409":
+          description: Interface has dependencies
+  /inventory/interface-links:
+    get:
+      summary: List interface links
+      responses:
+        "200":
+          description: Interface link list
+    post:
+      summary: Create interface link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aInterfaceId, bInterfaceId, linkType]
+              properties:
+                aInterfaceId:
+                  type: string
+                bInterfaceId:
+                  type: string
+                circuitCode:
+                  type: string
+                linkType:
+                  type: string
+                capacityMbps:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Interface link created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /inventory/manufacturers:
+    get:
+      summary: List manufacturers
+      responses:
+        "200":
+          description: Manufacturer list
+  /inventory/device-models:
+    get:
+      summary: List device models
+      responses:
+        "200":
+          description: Device model list
+  /inventory/device-roles:
+    get:
+      summary: List device roles
+      responses:
+        "200":
+          description: Device role list
+  /circuits:
+    get:
+      summary: List circuits
+      responses:
+        "200":
+          description: Circuit list
+    post:
+      summary: Create circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, circuitType]
+              properties:
+                code:
+                  type: string
+                name:
+                  type: string
+                circuitType:
+                  type: string
+                providerCode:
+                  type: string
+                contractCode:
+                  type: string
+                capacityMbps:
+                  type: integer
+                slaTarget:
+                  type: number
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Circuit created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /circuits/{code}:
+    get:
+      summary: Circuit detail
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Circuit with endpoints
+        "404":
+          description: Circuit not found
+  /circuits/{code}/endpoints:
+    get:
+      summary: List circuit endpoints
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Circuit endpoint list
+        "503":
+          description: PostgreSQL required
+  /circuits/{code}/impact:
+    get:
+      summary: Circuit operational impact
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Impacted sites, devices and interfaces
+        "404":
+          description: Circuit not found
+    post:
+      summary: Create circuit endpoint
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                siteCode:
+                  type: string
+                deviceName:
+                  type: string
+                interfaceName:
+                  type: string
+                label:
+                  type: string
+                demarcation:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Circuit endpoint created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /topology/graph:
+    get:
+      summary: Operational topology graph
+      responses:
+        "200":
+          description: Nodes and edges for topology
+  /monitoring/alerts:
+    get:
+      summary: List normalized alerts
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Alert list
+    post:
+      summary: Create normalized alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [objectType, objectId, monitorSource, severity, title]
+              properties:
+                objectType:
+                  type: string
+                objectId:
+                  type: string
+                monitorSource:
+                  type: string
+                externalRef:
+                  type: string
+                severity:
+                  type: string
+                  enum: [critical, major, minor]
+                title:
+                  type: string
+                description:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Alert created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /monitoring/alerts/{id}/ack:
+    post:
+      summary: Acknowledge alert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Alert acknowledged
+        "503":
+          description: PostgreSQL required
+  /monitoring/maintenance-windows:
+    get:
+      summary: List maintenance windows
+      responses:
+        "200":
+          description: Maintenance window list
+    post:
+      summary: Create maintenance window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [objectType, objectId, title, startsAt, endsAt]
+              properties:
+                objectType:
+                  type: string
+                objectId:
+                  type: string
+                title:
+                  type: string
+                startsAt:
+                  type: string
+                endsAt:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Maintenance window created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /documentation/documents:
+    get:
+      summary: List technical documents
+      parameters:
+        - name: objectType
+          in: query
+          schema:
+            type: string
+        - name: objectId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document list
+    post:
+      summary: Create technical document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [objectType, objectId, title, bodyMd]
+              properties:
+                objectType:
+                  type: string
+                objectId:
+                  type: string
+                title:
+                  type: string
+                bodyMd:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Document created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /documentation/evidence:
+    get:
+      summary: List evidence files
+      parameters:
+        - name: objectType
+          in: query
+          schema:
+            type: string
+        - name: objectId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Evidence list
+    post:
+      summary: Create evidence record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [objectType, objectId, filename, storageKey]
+              properties:
+                objectType:
+                  type: string
+                objectId:
+                  type: string
+                filename:
+                  type: string
+                storageKey:
+                  type: string
+                contentType:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Evidence record created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /backups:
+    get:
+      summary: List configuration backups
+      responses:
+        "200":
+          description: Backup list
+    post:
+      summary: Register configuration backup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceName, storageKey, configHash, source]
+              properties:
+                deviceName:
+                  type: string
+                storageKey:
+                  type: string
+                configHash:
+                  type: string
+                source:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: Backup registered
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /backups/summary:
+    get:
+      summary: Backup coverage summary
+      responses:
+        "200":
+          description: Backup coverage summary
+  /changes:
+    get:
+      summary: List change requests
+      responses:
+        "200":
+          description: Change request list
+    post:
+      summary: Create change request
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description]
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                riskLevel:
+                  type: string
+                plannedStart:
+                  type: string
+                plannedEnd:
+                  type: string
+                impacts:
+                  type: array
+      responses:
+        "201":
+          description: Change request created
+        "400":
+          description: Invalid payload
+        "503":
+          description: PostgreSQL required
+  /changes/{id}/impacts:
+    get:
+      summary: List change impacts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Impact list
+        "503":
+          description: PostgreSQL required
+  /changes/{id}/approve:
+    post:
+      summary: Approve change request
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Change request approved
+        "503":
+          description: PostgreSQL required
+  /audit/recent:
+    get:
+      summary: Recent audit events
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Recent audit event list

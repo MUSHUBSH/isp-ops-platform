@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: ispops-postgres
+    environment:
+      POSTGRES_DB: ispops
+      POSTGRES_USER: ispops
+      POSTGRES_PASSWORD: ispops_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./packages/database/seed.sql:/docker-entrypoint-initdb.d/002-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ispops -d ispops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
