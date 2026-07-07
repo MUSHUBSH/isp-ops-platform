@@ -12,6 +12,7 @@ import {
   createRackInDb,
   deleteDeviceInDb,
   deleteInterfaceInDb,
+  deleteInterfaceLinkInDb,
   deletePowerFeedInDb,
   deleteRackInDb,
   listDeviceModelsFromDb,
@@ -24,6 +25,7 @@ import {
   listRacksBySiteFromDb,
   updateDeviceInDb,
   updateInterfaceInDb,
+  updateInterfaceLinkInDb,
   updatePowerFeedInDb,
   updateRackInDb,
   updateDevicePlacementInDb,
@@ -115,6 +117,13 @@ const createInterfaceLinkSchema = z.object({
   capacityMbps: z.number().int().positive().nullable().optional(),
   reason: z.string().max(500).nullable().optional()
 });
+
+const updateInterfaceLinkSchema = createInterfaceLinkSchema
+  .omit({ aInterfaceId: true, bInterfaceId: true, reason: true })
+  .partial()
+  .extend({
+    reason: z.string().max(500).nullable().optional()
+  });
 
 export async function registerInventoryRoutes(app: FastifyInstance) {
   app.get("/inventory/manufacturers", async () => ({
@@ -513,5 +522,50 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ link });
+  });
+
+  app.patch("/inventory/interface-links/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateInterfaceLinkSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid interface link payload", issues: parsed.error.issues });
+    }
+
+    const link = await updateInterfaceLinkInDb({ id, ...parsed.data });
+
+    if (!link) {
+      return reply.code(404).send({ message: "Interface link not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "interface_link.updated",
+      objectType: "interface_link",
+      objectId: link.id,
+      afterData: link,
+      reason: parsed.data.reason ?? "Actualizacion de enlace entre interfaces"
+    });
+
+    return { link };
+  });
+
+  app.delete("/inventory/interface-links/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const deleted = await deleteInterfaceLinkInDb(id);
+
+    if (!deleted) {
+      return reply.code(404).send({ message: "Interface link not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "interface_link.deleted",
+      objectType: "interface_link",
+      objectId: deleted.id,
+      reason: "Eliminacion de enlace entre interfaces"
+    });
+
+    return { deleted };
   });
 }

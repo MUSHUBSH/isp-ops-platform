@@ -170,7 +170,7 @@ export const fallbackInterfaces: NetworkInterface[] = [
 ];
 
 export const fallbackInterfaceLinks: InterfaceLink[] = [
-  { id: "lnk-lim-aqp", aInterfaceId: "if-pe-lim-xe002", bInterfaceId: "if-pe-aqp-xe001", aDevice: "PE-LIMA-01", bDevice: "PE-AQP-01", circuitCode: "TR-LIM-ARE-10G", status: "down", capacityMbps: 10000 }
+  { id: "lnk-lim-aqp", aInterfaceId: "if-pe-lim-xe002", bInterfaceId: "if-pe-aqp-xe001", aDevice: "PE-LIMA-01", bDevice: "PE-AQP-01", linkType: "transport", circuitCode: "TR-LIM-ARE-10G", status: "down", capacityMbps: 10000 }
 ];
 
 export const fallbackTopology: TopologyGraph = {

@@ -46,6 +46,7 @@ type LinkRow = {
   b_interface_id: string;
   a_device: string;
   b_device: string;
+  link_type: string;
   circuit_code: string | null;
   status: string;
   capacity_mbps: number | null;
@@ -143,6 +144,14 @@ export type CreateInterfaceLinkInput = {
   capacityMbps?: number | null;
 };
 
+export type UpdateInterfaceLinkInput = {
+  id: string;
+  circuitCode?: string | null;
+  linkType?: string;
+  status?: string;
+  capacityMbps?: number | null;
+};
+
 export type CreateRackInput = {
   siteCode: string;
   code: string;
@@ -231,6 +240,7 @@ function mapLink(row: LinkRow) {
     bInterfaceId: row.b_interface_id,
     aDevice: row.a_device,
     bDevice: row.b_device,
+    linkType: row.link_type,
     circuitCode: row.circuit_code,
     status: row.status,
     capacityMbps: row.capacity_mbps
@@ -334,6 +344,7 @@ export async function listInterfaceLinksFromDb() {
        il.b_interface_id::text,
        ad.name AS a_device,
        bd.name AS b_device,
+       il.link_type,
        c.code AS circuit_code,
        il.status,
        il.capacity_mbps
@@ -518,6 +529,7 @@ export async function createInterfaceLinkInDb(input: CreateInterfaceLinkInput) {
        b_interface_id::text,
        (SELECT d.name FROM interfaces i JOIN devices d ON d.id = i.device_id WHERE i.id = $1::uuid) AS a_device,
        (SELECT d.name FROM interfaces i JOIN devices d ON d.id = i.device_id WHERE i.id = $2::uuid) AS b_device,
+       link_type,
        (SELECT code FROM selected_circuit) AS circuit_code,
        status,
        capacity_mbps`,
@@ -532,6 +544,44 @@ export async function createInterfaceLinkInDb(input: CreateInterfaceLinkInput) {
   );
 
   return row ? mapLink(row) : null;
+}
+
+export async function updateInterfaceLinkInDb(input: UpdateInterfaceLinkInput) {
+  const row = await queryOne<LinkRow>(
+    `WITH selected_circuit AS (
+       SELECT id, code FROM circuits WHERE code = $2
+     )
+     UPDATE interface_links il
+     SET circuit_id = CASE WHEN $2::text IS NULL THEN NULL ELSE (SELECT id FROM selected_circuit) END,
+         link_type = COALESCE($3, link_type),
+         status = COALESCE($4, status),
+         capacity_mbps = $5
+     WHERE il.id = $1::uuid
+     RETURNING
+       il.id,
+       il.a_interface_id::text,
+       il.b_interface_id::text,
+       (SELECT d.name FROM interfaces i JOIN devices d ON d.id = i.device_id WHERE i.id = il.a_interface_id) AS a_device,
+       (SELECT d.name FROM interfaces i JOIN devices d ON d.id = i.device_id WHERE i.id = il.b_interface_id) AS b_device,
+       il.link_type,
+       (SELECT c.code FROM circuits c WHERE c.id = il.circuit_id) AS circuit_code,
+       il.status,
+       il.capacity_mbps`,
+    [input.id, input.circuitCode ?? null, input.linkType ?? null, input.status ?? null, input.capacityMbps ?? null]
+  );
+
+  return row ? mapLink(row) : null;
+}
+
+export async function deleteInterfaceLinkInDb(id: string) {
+  const row = await queryOne<{ id: string }>(
+    `DELETE FROM interface_links
+     WHERE id = $1::uuid
+     RETURNING id`,
+    [id]
+  );
+
+  return row ?? null;
 }
 
 

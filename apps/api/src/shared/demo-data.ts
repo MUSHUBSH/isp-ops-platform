@@ -335,6 +335,7 @@ export const interfaceLinks = [
     bInterfaceId: "if-pe-aqp-xe001",
     aDevice: "PE-LIMA-01",
     bDevice: "PE-AQP-01",
+    linkType: "transport",
     circuitCode: "TR-LIM-ARE-10G",
     status: "down",
     capacityMbps: 10000

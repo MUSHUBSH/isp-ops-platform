@@ -1497,6 +1497,23 @@ h2 {
   padding: 10px;
 }
 
+.miniList article.selectedMiniItem {
+  border-color: #3bcda6;
+  background: #0f2425;
+}
+
+.miniListButton {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
 .miniList span,
 .miniList small {
   color: var(--text-muted);

@@ -339,6 +339,7 @@ export type InterfaceLink = {
   bInterfaceId: string;
   aDevice: string;
   bDevice: string;
+  linkType: string;
   circuitCode: string | null;
   status: string;
   capacityMbps: number | null;
