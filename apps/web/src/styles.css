@@ -313,7 +313,19 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 14px;
+}
+
+.compactSelect {
+  min-width: 112px;
+  max-width: 170px;
+  height: 34px;
+  border: 1px solid #29464d;
+  border-radius: 6px;
+  background: #0a1518;
+  color: #dce9e7;
+  padding: 0 10px;
 }
 
 .topologyPreview {

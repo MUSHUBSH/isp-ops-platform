@@ -209,6 +209,13 @@ export function usePlatformData(): PlatformData {
         apiGet<{ user: CurrentUser | null }>("/identity/me")
       ]);
 
+      const siteCodes = sitesPayload.sites.length > 0 ? sitesPayload.sites.map((site) => site.code) : ["AQP-POP"];
+      const [allRacks, allPowerFeeds, allPowerAssets] = await Promise.all([
+        Promise.all(siteCodes.map((code) => apiGet<{ racks: RackView[] }>(`/sites/${code}/racks`))).then((payloads) => payloads.flatMap((payload) => payload.racks)),
+        Promise.all(siteCodes.map((code) => apiGet<{ feeds: PowerFeed[] }>(`/sites/${code}/power`))).then((payloads) => payloads.flatMap((payload) => payload.feeds)),
+        Promise.all(siteCodes.map((code) => apiGet<{ assets: PowerAsset[] }>(`/sites/${code}/power-assets`))).then((payloads) => payloads.flatMap((payload) => payload.assets))
+      ]);
+
       if (!cancelledRef?.cancelled) {
         setData({
           noc,
@@ -225,10 +232,10 @@ export function usePlatformData(): PlatformData {
           circuits: circuitsPayload.circuits,
           datacenterAssets: datacenterAssetsPayload.assets,
           devices: devicesPayload.devices,
-          racks: racksPayload.racks,
-          powerAssets: powerAssetsPayload.assets,
+          racks: allRacks.length > 0 ? allRacks : racksPayload.racks,
+          powerAssets: allPowerAssets.length > 0 ? allPowerAssets : powerAssetsPayload.assets,
           patchcords: patchcordsPayload.patchcords,
-          powerFeeds: powerPayload.feeds,
+          powerFeeds: allPowerFeeds.length > 0 ? allPowerFeeds : powerPayload.feeds,
           fiberSpans: fiberSpansPayload.spans,
           fiberStrands: fiberStrandsPayload.strands,
           interfaces: interfacesPayload.interfaces,

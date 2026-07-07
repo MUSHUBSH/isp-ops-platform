@@ -198,7 +198,7 @@ export function App() {
           />
         )}
         {activeModule === "map" && <NetworkMapView siteMap={data.siteMap} />}
-        {activeModule === "racks" && <RacksPowerView devices={data.devices} onReload={data.reload} powerAssets={data.powerAssets} racks={data.racks} powerFeeds={data.powerFeeds} />}
+        {activeModule === "racks" && <RacksPowerView devices={data.devices} onReload={data.reload} powerAssets={data.powerAssets} racks={data.racks} powerFeeds={data.powerFeeds} sites={data.sites} />}
         {activeModule === "devices" && <DevicesView devices={data.devices} onReload={data.reload} sites={data.sites} />}
         {activeModule === "interfaces" && <InterfacesView devices={data.devices} interfaces={data.interfaces} onReload={data.reload} />}
         {activeModule === "datacenter" && <DatacenterView assets={data.datacenterAssets} capacities={data.providerCapacities} fiberSpans={data.fiberSpans} fiberStrands={data.fiberStrands} onReload={data.reload} patchcords={data.patchcords} transceivers={data.transceivers} />}
@@ -2458,19 +2458,47 @@ function formatMbps(value: number | null | undefined) {
 }
 
 
-function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: { devices: Device[]; onReload: () => Promise<void>; powerAssets: PowerAsset[]; racks: RackView[]; powerFeeds: PowerFeed[] }) {
-  const [selectedRackId, setSelectedRackId] = useState(racks[0]?.id ?? "");
+function RacksPowerView({
+  devices,
+  onReload,
+  powerAssets,
+  racks,
+  powerFeeds,
+  sites
+}: {
+  devices: Device[];
+  onReload: () => Promise<void>;
+  powerAssets: PowerAsset[];
+  racks: RackView[];
+  powerFeeds: PowerFeed[];
+  sites: Site[];
+}) {
+  const firstSiteCode = sites[0]?.code ?? racks[0]?.siteCode ?? "AQP-POP";
+  const [activeSiteCode, setActiveSiteCode] = useState(firstSiteCode);
+  const siteRacks = useMemo(() => racks.filter((rack) => rack.siteCode === activeSiteCode), [activeSiteCode, racks]);
+  const sitePowerFeeds = useMemo(() => powerFeeds.filter((feed) => feed.siteCode === activeSiteCode), [activeSiteCode, powerFeeds]);
+  const sitePowerAssets = useMemo(() => powerAssets.filter((asset) => asset.siteCode === activeSiteCode), [activeSiteCode, powerAssets]);
+  const [selectedRackId, setSelectedRackId] = useState(siteRacks[0]?.id ?? "");
   const [rackForm, setRackForm] = useState({ code: "", name: "", heightU: "45" });
   const [powerForm, setPowerForm] = useState({ name: "", capacityWatts: "", loadWatts: "", source: "" });
   const [assetForm, setAssetForm] = useState({ name: "", assetType: "ups", capacityWatts: "", loadWatts: "", autonomyMinutes: "", batteryHealthPercent: "", sourceFeedId: "", notes: "" });
-  const [placementForm, setPlacementForm] = useState({ deviceId: "", rackId: racks[0]?.id ?? "", positionU: "", heightU: "1", powerFeedId: "" });
+  const [placementForm, setPlacementForm] = useState({ deviceId: "", rackId: siteRacks[0]?.id ?? "", positionU: "", heightU: "1", powerFeedId: "" });
   const [crudState, setCrudState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const selectedRack = racks.find((rack) => rack.id === selectedRackId) ?? racks[0];
-  const activeSiteCode = selectedRack?.siteCode ?? racks[0]?.siteCode ?? "AQP-POP";
+  const selectedRack = siteRacks.find((rack) => rack.id === selectedRackId) ?? siteRacks[0];
   const siteDevices = devices.filter((device) => device.siteCode === activeSiteCode);
-  const totalLoad = powerFeeds.reduce((sum, feed) => sum + (feed.loadWatts ?? 0), 0);
-  const totalCapacity = powerFeeds.reduce((sum, feed) => sum + (feed.capacityWatts ?? 0), 0);
+  const mountedDevices = siteRacks.reduce((sum, rack) => sum + rack.devices.length, 0);
+  const totalLoad = sitePowerFeeds.reduce((sum, feed) => sum + (feed.loadWatts ?? 0), 0);
+  const totalCapacity = sitePowerFeeds.reduce((sum, feed) => sum + (feed.capacityWatts ?? 0), 0);
   const utilization = totalCapacity > 0 ? Math.round((totalLoad / totalCapacity) * 100) : 0;
+
+  useEffect(() => {
+    const currentRackBelongsToSite = siteRacks.some((rack) => rack.id === selectedRackId);
+    if (!currentRackBelongsToSite) {
+      const nextRackId = siteRacks[0]?.id ?? "";
+      setSelectedRackId(nextRackId);
+      setPlacementForm((current) => ({ ...current, rackId: nextRackId, deviceId: "", powerFeedId: "" }));
+    }
+  }, [activeSiteCode, selectedRackId, siteRacks]);
 
   async function createRack(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2575,10 +2603,10 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
   return (
     <ModulePage eyebrow="Racks / energia" title="Vista fisica por sede, rack y alimentacion">
       <section className="metricGrid compactMetrics">
-        <Metric label="Racks" value={String(racks.length)} tone="neutral" />
+        <Metric label="Racks sede" value={String(siteRacks.length)} tone="neutral" />
+        <Metric label="Equipos montados" value={String(mountedDevices)} tone="neutral" />
         <Metric label="Uso energia" value={`${utilization}%`} tone={utilization > 80 ? "warning" : "neutral"} />
         <Metric label="Carga W" value={String(totalLoad)} tone="neutral" />
-        <Metric label="Capacidad W" value={String(totalCapacity)} tone="neutral" />
       </section>
       <section className="rackLayout">
         <div className="panel rackListPanel">
@@ -2587,9 +2615,13 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
               <p className="eyebrow">Racks</p>
               <h2>{activeSiteCode}</h2>
             </div>
+            <select className="compactSelect" onChange={(event) => setActiveSiteCode(event.target.value)} value={activeSiteCode}>
+              {sites.map((site) => <option key={site.id} value={site.code}>{site.code}</option>)}
+              {sites.length === 0 && <option value={activeSiteCode}>{activeSiteCode}</option>}
+            </select>
           </div>
           <div className="rackListStack">
-            {racks.map((rack) => (
+            {siteRacks.map((rack) => (
               <div className="rackListWrap" key={rack.id}>
                 <button className={rack.id === selectedRack?.id ? "rackListItem active" : "rackListItem"} onClick={() => setSelectedRackId(rack.id)} type="button">
                   <strong>{rack.code}</strong>
@@ -2599,6 +2631,7 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
                 <button className="smallDanger" onClick={() => void deleteRack(rack.id)} type="button">Eliminar</button>
               </div>
             ))}
+            {siteRacks.length === 0 && <span className="mutedText">Sin racks registrados en esta sede</span>}
           </div>
           <form className="quickForm" onSubmit={createRack}>
             <p className="eyebrow">Nuevo rack</p>
@@ -2618,13 +2651,13 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
               {siteDevices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}
             </select></label>
             <label>Rack<select onChange={(event) => setPlacementForm((current) => ({ ...current, rackId: event.target.value }))} value={placementForm.rackId || selectedRack?.id || ""}>
-              {racks.map((rack) => <option key={rack.id} value={rack.id}>{rack.code}</option>)}
+              {siteRacks.map((rack) => <option key={rack.id} value={rack.id}>{rack.code}</option>)}
             </select></label>
             <label>U superior<input inputMode="numeric" onChange={(event) => setPlacementForm((current) => ({ ...current, positionU: event.target.value }))} value={placementForm.positionU} /></label>
             <label>Altura U<input inputMode="numeric" onChange={(event) => setPlacementForm((current) => ({ ...current, heightU: event.target.value }))} value={placementForm.heightU} /></label>
             <label className="wideField">Energia<select onChange={(event) => setPlacementForm((current) => ({ ...current, powerFeedId: event.target.value }))} value={placementForm.powerFeedId}>
               <option value="">Sin feed</option>
-              {powerFeeds.map((feed) => <option key={feed.id} value={feed.id}>{feed.name}</option>)}
+              {sitePowerFeeds.map((feed) => <option key={feed.id} value={feed.id}>{feed.name}</option>)}
             </select></label>
             <button type="submit">Montar equipo</button>
             <span className={`formState ${crudState}`}>{formStateLabel(crudState)}</span>
@@ -2638,7 +2671,7 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
             </div>
           </div>
           <div className="powerFeedList">
-            {powerFeeds.map((feed) => {
+            {sitePowerFeeds.map((feed) => {
               const percent = feed.capacityWatts ? Math.round(((feed.loadWatts ?? 0) / feed.capacityWatts) * 100) : 0;
               return (
                 <article key={feed.id}>
@@ -2653,6 +2686,7 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
                 </article>
               );
             })}
+            {sitePowerFeeds.length === 0 && <span className="mutedText">Sin alimentaciones documentadas en esta sede</span>}
           </div>
           <form className="quickForm" onSubmit={createPowerFeed}>
             <p className="eyebrow">Nueva alimentacion</p>
@@ -2665,7 +2699,7 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
           </form>
           <div className="powerAssetList">
             <p className="eyebrow">Activos electricos</p>
-            {powerAssets.map((asset) => (
+            {sitePowerAssets.map((asset) => (
               <article key={asset.id}>
                 <div>
                   <strong>{asset.name}</strong>
@@ -2676,6 +2710,7 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
                 <em>Autonomia {asset.autonomyMinutes ?? 0} min - bateria {asset.batteryHealthPercent ?? 0}%</em>
               </article>
             ))}
+            {sitePowerAssets.length === 0 && <span className="mutedText">Sin activos electricos registrados en esta sede</span>}
           </div>
           <form className="quickForm" onSubmit={createPowerAsset}>
             <p className="eyebrow">Nuevo activo electrico</p>
@@ -2689,7 +2724,7 @@ function RacksPowerView({ devices, onReload, powerAssets, racks, powerFeeds }: {
             <label>Salud bateria %<input inputMode="numeric" onChange={(event) => setAssetForm((current) => ({ ...current, batteryHealthPercent: event.target.value }))} value={assetForm.batteryHealthPercent} /></label>
             <label className="wideField">Feed<select onChange={(event) => setAssetForm((current) => ({ ...current, sourceFeedId: event.target.value }))} value={assetForm.sourceFeedId}>
               <option value="">Sin feed</option>
-              {powerFeeds.map((feed) => <option key={feed.id} value={feed.id}>{feed.name}</option>)}
+              {sitePowerFeeds.map((feed) => <option key={feed.id} value={feed.id}>{feed.name}</option>)}
             </select></label>
             <label className="wideField">Notas<input onChange={(event) => setAssetForm((current) => ({ ...current, notes: event.target.value }))} value={assetForm.notes} /></label>
             <button type="submit">Agregar activo</button>
