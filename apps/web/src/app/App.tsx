@@ -191,9 +191,12 @@ export function App() {
           <SitesView
             circuits={data.circuits}
             devices={data.devices}
+            fiberSpans={data.fiberSpans}
             incidents={data.incidents}
             onReload={data.reload}
+            powerFeeds={data.powerFeeds}
             prefixes={data.prefixes}
+            racks={data.racks}
             siteMap={data.siteMap}
             sites={data.sites}
           />
@@ -850,18 +853,24 @@ function SitesView({
   circuits = [],
   compact = false,
   devices = [],
+  fiberSpans = [],
   incidents = [],
   onReload,
+  powerFeeds = [],
   prefixes = [],
+  racks = [],
   siteMap,
   sites
 }: {
   circuits?: Circuit[];
   compact?: boolean;
   devices?: Device[];
+  fiberSpans?: FiberSpan[];
   incidents?: Incident[];
   onReload?: () => Promise<void>;
+  powerFeeds?: PowerFeed[];
   prefixes?: Prefix[];
+  racks?: RackView[];
   siteMap?: SiteMap;
   sites: Site[];
 }) {
@@ -898,6 +907,10 @@ function SitesView({
     ? circuits.filter((circuit) => circuit.aSite === selectedSite.code || circuit.zSite === selectedSite.code)
     : [];
   const selectedPrefixes = selectedSite ? prefixes.filter((prefix) => prefix.siteCode === selectedSite.code) : [];
+  const selectedRacks = selectedSite ? racks.filter((rack) => rack.siteCode === selectedSite.code) : [];
+  const selectedPowerFeeds = selectedSite ? powerFeeds.filter((feed) => feed.siteCode === selectedSite.code) : [];
+  const selectedFiberSpans = selectedSite ? fiberSpans.filter((span) => span.aSite === selectedSite.code || span.zSite === selectedSite.code) : [];
+  const selectedMapLinks = selectedSite ? siteMap?.links.filter((link) => link.a === selectedSite.code || link.z === selectedSite.code) ?? [] : [];
   const selectedIncidentText = selectedSite ? `${selectedSite.code} ${selectedSite.name}`.toLowerCase() : "";
   const selectedIncidents = selectedSite
     ? incidents.filter((incident) => {
@@ -906,6 +919,9 @@ function SitesView({
     })
     : [];
   const selectedCapacityMbps = selectedCircuits.reduce((sum, circuit) => sum + (circuit.capacityMbps ?? 0), 0);
+  const selectedRackUtilization = selectedRacks.reduce((sum, rack) => sum + rack.utilizationU, 0);
+  const selectedPowerLoad = selectedPowerFeeds.reduce((sum, feed) => sum + (feed.loadWatts ?? 0), 0);
+  const selectedPowerCapacity = selectedPowerFeeds.reduce((sum, feed) => sum + (feed.capacityWatts ?? 0), 0);
 
   useEffect(() => {
     const nextSite = sites.find((site) => site.code === selectedCode);
@@ -1068,6 +1084,8 @@ function SitesView({
             <Metric label="Circuitos" value={String(selectedCircuits.length || selectedSite.circuits)} tone="neutral" />
             <Metric label="Capacidad" value={`${formatMbps(selectedCapacityMbps)} agregados`} tone="neutral" />
             <Metric label="Incidencias" value={String(selectedIncidents.length || selectedSite.incidents)} tone={(selectedIncidents.length || selectedSite.incidents) > 0 ? "warning" : "neutral"} />
+            <Metric label="Racks / RU" value={`${selectedRacks.length} / ${selectedRackUtilization}U`} tone="neutral" />
+            <Metric label="Energia" value={`${selectedPowerLoad}W / ${selectedPowerCapacity}W`} tone={selectedPowerCapacity > 0 && selectedPowerLoad / selectedPowerCapacity > 0.8 ? "warning" : "neutral"} />
           </div>
           <div className="siteOpsGrid">
             <div>
@@ -1116,6 +1134,42 @@ function SitesView({
                   </article>
                 ))}
                 {selectedIncidents.length === 0 && <span className="mutedText">Sin incidencias relacionadas</span>}
+              </div>
+            </div>
+            <div>
+              <p className="eyebrow">Racks y energia</p>
+              <div className="compactList">
+                {selectedRacks.slice(0, 8).map((rack) => (
+                  <article key={rack.id}>
+                    <strong>{rack.code}</strong>
+                    <span>{rack.name} - {rack.utilizationU}/{rack.heightU}U</span>
+                  </article>
+                ))}
+                {selectedPowerFeeds.slice(0, 4).map((feed) => (
+                  <article key={feed.id}>
+                    <strong>{feed.name}</strong>
+                    <span>{feed.loadWatts ?? 0}W / {feed.capacityWatts ?? 0}W - {feed.status}</span>
+                  </article>
+                ))}
+                {selectedRacks.length === 0 && selectedPowerFeeds.length === 0 && <span className="mutedText">Sin racks ni energia registrados</span>}
+              </div>
+            </div>
+            <div>
+              <p className="eyebrow">Transporte fisico</p>
+              <div className="compactList">
+                {selectedFiberSpans.slice(0, 6).map((span) => (
+                  <article key={span.id}>
+                    <strong>{span.code}</strong>
+                    <span>{span.aSite} - {span.zSite} / {span.usedFibers}/{span.fiberCount} hilos</span>
+                  </article>
+                ))}
+                {selectedMapLinks.slice(0, 6).map((link) => (
+                  <article key={link.id}>
+                    <strong>{link.label}</strong>
+                    <span>{link.a} - {link.z} / {link.capacityMbps ? formatMbps(link.capacityMbps) : "sin capacidad"} / {link.status}</span>
+                  </article>
+                ))}
+                {selectedFiberSpans.length === 0 && selectedMapLinks.length === 0 && <span className="mutedText">Sin tramos asociados</span>}
               </div>
             </div>
           </div>
