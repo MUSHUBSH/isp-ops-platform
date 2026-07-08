@@ -3637,11 +3637,30 @@ function MonitoringView({
     startsAt: "",
     endsAt: ""
   });
+  const [selectedMaintenanceId, setSelectedMaintenanceId] = useState(maintenanceWindows[0]?.id ?? "");
+  const selectedMaintenance = maintenanceWindows.find((window) => window.id === selectedMaintenanceId);
+  const [maintenanceEditForm, setMaintenanceEditForm] = useState({
+    title: selectedMaintenance?.title ?? "",
+    status: selectedMaintenance?.status ?? "scheduled",
+    startsAt: selectedMaintenance ? selectedMaintenance.startsAt.slice(0, 16) : "",
+    endsAt: selectedMaintenance ? selectedMaintenance.endsAt.slice(0, 16) : ""
+  });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const critical = alerts.filter((alert) => alert.severity === "critical").length;
   const major = alerts.filter((alert) => alert.severity === "major").length;
   const minor = alerts.filter((alert) => alert.severity === "minor").length;
   const selectedAlert = alerts.find((alert) => alert.id === alertOperationForm.alertId);
+
+  useEffect(() => {
+    if (selectedMaintenance) {
+      setMaintenanceEditForm({
+        title: selectedMaintenance.title,
+        status: selectedMaintenance.status,
+        startsAt: selectedMaintenance.startsAt.slice(0, 16),
+        endsAt: selectedMaintenance.endsAt.slice(0, 16)
+      });
+    }
+  }, [selectedMaintenance]);
 
   function splitObjectKey(key: string) {
     const [objectType, objectId] = key.split(":");
@@ -3757,6 +3776,40 @@ function MonitoringView({
     }
   }
 
+  async function updateMaintenance(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedMaintenance) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/monitoring/maintenance-windows/${selectedMaintenance.id}`, {
+        title: maintenanceEditForm.title,
+        status: maintenanceEditForm.status,
+        startsAt: maintenanceEditForm.startsAt,
+        endsAt: maintenanceEditForm.endsAt,
+        reason: "Actualizacion desde modulo Monitoreo"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function deleteMaintenance() {
+    if (!selectedMaintenance) return;
+    setFormState("saving");
+
+    try {
+      await apiDelete(`/monitoring/maintenance-windows/${selectedMaintenance.id}`);
+      setSelectedMaintenanceId("");
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
   return (
     <ModulePage eyebrow="Monitoreo" title="Alertas normalizadas y ventanas de mantenimiento">
       <section className="metricGrid compactMetrics">
@@ -3823,6 +3876,21 @@ function MonitoringView({
             </select></label>
             <button disabled={!maintenanceForm.objectKey || !maintenanceForm.title || !maintenanceForm.startsAt || !maintenanceForm.endsAt} type="submit">Programar</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+          </form>
+          <form className="quickForm" onSubmit={updateMaintenance}>
+            <p className="eyebrow">Editar ventana</p>
+            <label className="wideField">Ventana<select onChange={(event) => setSelectedMaintenanceId(event.target.value)} value={selectedMaintenanceId}>
+              <option value="">Seleccionar</option>
+              {maintenanceWindows.map((window) => <option key={window.id} value={window.id}>{window.status} - {window.title}</option>)}
+            </select></label>
+            <label className="wideField">Titulo<input disabled={!selectedMaintenance} onChange={(event) => setMaintenanceEditForm((current) => ({ ...current, title: event.target.value }))} value={maintenanceEditForm.title} /></label>
+            <label>Inicio<input disabled={!selectedMaintenance} onChange={(event) => setMaintenanceEditForm((current) => ({ ...current, startsAt: event.target.value }))} type="datetime-local" value={maintenanceEditForm.startsAt} /></label>
+            <label>Fin<input disabled={!selectedMaintenance} onChange={(event) => setMaintenanceEditForm((current) => ({ ...current, endsAt: event.target.value }))} type="datetime-local" value={maintenanceEditForm.endsAt} /></label>
+            <label>Estado<select disabled={!selectedMaintenance} onChange={(event) => setMaintenanceEditForm((current) => ({ ...current, status: event.target.value }))} value={maintenanceEditForm.status}>
+              <option value="scheduled">scheduled</option><option value="active">active</option><option value="completed">completed</option><option value="cancelled">cancelled</option>
+            </select></label>
+            <button disabled={!selectedMaintenance || !maintenanceEditForm.title || !maintenanceEditForm.startsAt || !maintenanceEditForm.endsAt} type="submit">Guardar ventana</button>
+            <button className="dangerButton" disabled={!selectedMaintenance} onClick={() => void deleteMaintenance()} type="button">Eliminar ventana</button>
           </form>
         </div>
       </section>

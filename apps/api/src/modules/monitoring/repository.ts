@@ -49,6 +49,14 @@ export type CreateMaintenanceInput = {
   status?: string;
 };
 
+export type UpdateMaintenanceInput = {
+  id: string;
+  title?: string;
+  startsAt?: string;
+  endsAt?: string;
+  status?: string;
+};
+
 function mapAlert(row: AlertRow) {
   return {
     id: row.id,
@@ -208,6 +216,32 @@ export async function createMaintenanceWindowInDb(input: CreateMaintenanceInput)
   );
 
   return row ? mapMaintenance(row) : null;
+}
+
+export async function updateMaintenanceWindowInDb(input: UpdateMaintenanceInput) {
+  const row = await queryOne<MaintenanceRow>(
+    `UPDATE maintenance_windows
+     SET title = COALESCE($2, title),
+         status = COALESCE($3, status),
+         starts_at = COALESCE($4::timestamptz, starts_at),
+         ends_at = COALESCE($5::timestamptz, ends_at)
+     WHERE id = $1::uuid
+     RETURNING id, object_type, object_id::text, title, status, starts_at::text, ends_at::text`,
+    [input.id, input.title ?? null, input.status ?? null, input.startsAt ?? null, input.endsAt ?? null]
+  );
+
+  return row ? mapMaintenance(row) : null;
+}
+
+export async function deleteMaintenanceWindowInDb(id: string) {
+  const row = await queryOne<{ id: string }>(
+    `DELETE FROM maintenance_windows
+     WHERE id = $1::uuid
+     RETURNING id`,
+    [id]
+  );
+
+  return row ?? null;
 }
 
 export async function getAlertCountsFromDb() {

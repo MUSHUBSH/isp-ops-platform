@@ -7,8 +7,10 @@ import {
   acknowledgeAlertInDb,
   createAlertInDb,
   createMaintenanceWindowInDb,
+  deleteMaintenanceWindowInDb,
   listAlertsFromDb,
   listMaintenanceWindowsFromDb,
+  updateMaintenanceWindowInDb,
   updateAlertStatusInDb
 } from "./repository.js";
 
@@ -36,6 +38,13 @@ const createMaintenanceSchema = z.object({
   status: z.string().max(40).optional(),
   reason: z.string().max(500).nullable().optional()
 });
+
+const updateMaintenanceSchema = createMaintenanceSchema
+  .omit({ objectType: true, objectId: true, reason: true })
+  .partial()
+  .extend({
+    reason: z.string().max(500).nullable().optional()
+  });
 
 const updateAlertStatusSchema = z.object({
   status: z.string().min(2).max(40),
@@ -151,5 +160,54 @@ export async function registerMonitoringRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ maintenanceWindow });
+  });
+
+  app.patch("/monitoring/maintenance-windows/:id", { preHandler: requirePermission("maintenance.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateMaintenanceSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid maintenance payload", issues: parsed.error.issues });
+    }
+
+    const before = ((await listMaintenanceWindowsFromDb()) ?? []).find((item) => item.id === id) ?? null;
+    const maintenanceWindow = await updateMaintenanceWindowInDb({ id, ...parsed.data });
+
+    if (!maintenanceWindow) {
+      return reply.code(404).send({ message: "Maintenance window not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "maintenance_window.updated",
+      objectType: "maintenance_window",
+      objectId: maintenanceWindow.id,
+      beforeData: before,
+      afterData: maintenanceWindow,
+      reason: parsed.data.reason ?? "Actualizacion de ventana de mantenimiento"
+    });
+
+    return { maintenanceWindow };
+  });
+
+  app.delete("/monitoring/maintenance-windows/:id", { preHandler: requirePermission("maintenance.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const before = ((await listMaintenanceWindowsFromDb()) ?? []).find((item) => item.id === id) ?? null;
+    const deleted = await deleteMaintenanceWindowInDb(id);
+
+    if (!deleted) {
+      return reply.code(404).send({ message: "Maintenance window not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "maintenance_window.deleted",
+      objectType: "maintenance_window",
+      objectId: deleted.id,
+      beforeData: before,
+      reason: "Eliminacion de ventana de mantenimiento"
+    });
+
+    return { deleted };
   });
 }
