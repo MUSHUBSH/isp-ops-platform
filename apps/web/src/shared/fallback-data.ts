@@ -146,9 +146,9 @@ export const fallbackProviders: Provider[] = [
 ];
 
 export const fallbackIps: IpAssignment[] = [
-  { id: "ip-pe-lim-loopback", address: "190.0.2.2/32", prefix: "190.0.2.0/24", device: "PE-LIMA-01", interface: "lo0", site: "LIM-CORE", service: "BGP edge", status: "assigned" },
-  { id: "ip-aqp-uplink", address: "190.0.2.18/32", prefix: "190.0.2.0/24", device: "PE-AQP-01", interface: "lo0", site: "AQP-POP", service: "Regional POP", status: "assigned" },
-  { id: "ip-undoc-001", address: "190.0.2.210/32", prefix: "190.0.2.0/24", device: null, interface: null, site: "LIM-CORE", service: null, status: "undocumented" }
+  { id: "ip-pe-lim-loopback", address: "190.0.2.2/32", prefix: "190.0.2.0/24", device: "PE-LIMA-01", interface: "lo0", site: "LIM-CORE", service: "BGP edge", role: "loopback", status: "assigned", description: "Loopback BGP edge" },
+  { id: "ip-aqp-uplink", address: "190.0.2.18/32", prefix: "190.0.2.0/24", device: "PE-AQP-01", interface: "lo0", site: "AQP-POP", service: "Regional POP", role: "loopback", status: "assigned", description: "Loopback POP regional" },
+  { id: "ip-undoc-001", address: "190.0.2.210/32", prefix: "190.0.2.0/24", device: null, interface: null, site: "LIM-CORE", service: null, role: "unknown", status: "undocumented", description: "Detectada pendiente de documentar" }
 ];
 
 export const fallbackCircuits: Circuit[] = [

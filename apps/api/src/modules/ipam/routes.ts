@@ -3,7 +3,7 @@ import { z } from "zod";
 import { recordAuditEvent } from "../../shared/audit-service.js";
 import { actorId, requirePermission } from "../../shared/auth.js";
 import { ipAssignments, prefixes } from "../../shared/demo-data.js";
-import { createIpInDb, createPrefixInDb, deletePrefixInDb, listIpAssignmentsFromDb, listPrefixesFromDb, updatePrefixInDb } from "./repository.js";
+import { createIpInDb, createPrefixInDb, deleteIpInDb, deletePrefixInDb, listIpAssignmentsFromDb, listPrefixesFromDb, updateIpInDb, updatePrefixInDb } from "./repository.js";
 
 const createPrefixSchema = z.object({
   prefix: z.string().min(3).max(64),
@@ -25,6 +25,13 @@ const createIpSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   reason: z.string().max(500).nullable().optional()
 });
+
+const updateIpSchema = createIpSchema
+  .omit({ address: true, prefix: true, reason: true })
+  .partial()
+  .extend({
+    reason: z.string().max(500).nullable().optional()
+  });
 
 const updatePrefixSchema = z.object({
   role: z.string().min(2).max(80),
@@ -167,5 +174,59 @@ export async function registerIpamRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ address });
+  });
+
+  app.patch("/ipam/addresses/:id", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateIpSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid IP update payload", issues: parsed.error.issues });
+    }
+
+    const before = ((await listIpAssignmentsFromDb()) ?? ipAssignments).find((item) => item.id === id || item.address === id) ?? null;
+    const address = await updateIpInDb({ id, ...parsed.data });
+
+    if (!address) {
+      return reply.code(404).send({ message: "IP address not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "ip.updated",
+      objectType: "ip_address",
+      objectId: address.id,
+      beforeData: before,
+      afterData: address,
+      reason: parsed.data.reason ?? "Actualizacion de direccion IP"
+    });
+
+    return { address };
+  });
+
+  app.delete("/ipam/addresses/:id", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const before = ((await listIpAssignmentsFromDb()) ?? ipAssignments).find((item) => item.id === id || item.address === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "IP address not found" });
+    }
+
+    const deleted = await deleteIpInDb(id);
+
+    if (!deleted) {
+      return reply.code(409).send({ message: "IP address has dependencies or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "ip.deleted",
+      objectType: "ip_address",
+      objectId: deleted.id,
+      beforeData: before,
+      reason: "Eliminacion controlada de direccion IP"
+    });
+
+    return { deleted };
   });
 }

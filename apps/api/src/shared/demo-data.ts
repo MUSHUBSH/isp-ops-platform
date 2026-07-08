@@ -384,7 +384,9 @@ export const ipAssignments = [
     interface: "lo0",
     site: "LIM-CORE",
     service: "BGP edge",
-    status: "assigned"
+    role: "loopback",
+    status: "assigned",
+    description: "Loopback BGP edge"
   },
   {
     id: "ip-aqp-uplink",
@@ -394,7 +396,9 @@ export const ipAssignments = [
     interface: "lo0",
     site: "AQP-POP",
     service: "Regional POP",
-    status: "assigned"
+    role: "loopback",
+    status: "assigned",
+    description: "Loopback POP regional"
   },
   {
     id: "ip-undoc-001",
@@ -404,7 +408,9 @@ export const ipAssignments = [
     interface: null,
     site: "LIM-CORE",
     service: null,
-    status: "undocumented"
+    role: "unknown",
+    status: "undocumented",
+    description: "Detectada pendiente de documentar"
   }
 ];
 

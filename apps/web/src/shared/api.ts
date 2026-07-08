@@ -249,7 +249,9 @@ export type IpAssignment = {
   interface: string | null;
   site: string;
   service: string | null;
-  status: "assigned" | "reserved" | "undocumented";
+  role: string;
+  status: string;
+  description: string | null;
 };
 
 export type Circuit = {

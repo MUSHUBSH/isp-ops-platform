@@ -19,7 +19,9 @@ type IpRow = {
   interface: string | null;
   site: string | null;
   service: string | null;
+  role: string;
   status: string;
+  description: string | null;
 };
 
 export type CreatePrefixInput = {
@@ -36,6 +38,14 @@ export type CreateIpInput = {
   address: string;
   prefix: string;
   role: string;
+  status?: string;
+  interfaceId?: string | null;
+  description?: string | null;
+};
+
+export type UpdateIpInput = {
+  id: string;
+  role?: string;
   status?: string;
   interfaceId?: string | null;
   description?: string | null;
@@ -72,7 +82,9 @@ function mapIp(row: IpRow) {
     interface: row.interface,
     site: row.site ?? "GLOBAL",
     service: row.service,
-    status: row.status
+    role: row.role,
+    status: row.status,
+    description: row.description
   };
 }
 
@@ -109,7 +121,9 @@ export async function listIpAssignmentsFromDb() {
        i.name AS interface,
        s.code AS site,
        svc.name AS service,
-       ip.status
+       ip.role,
+       ip.status,
+       ip.description
      FROM ip_addresses ip
      JOIN prefixes p ON p.id = ip.prefix_id
      LEFT JOIN interfaces i ON i.id = ip.interface_id
@@ -258,7 +272,9 @@ export async function createIpInDb(input: CreateIpInput) {
        i.name AS interface,
        COALESCE(ds.code, ps.code) AS site,
        NULL::text AS service,
-       inserted.status
+       $3::text AS role,
+       inserted.status,
+       $5::text AS description
      FROM inserted
      JOIN prefixes p ON p.id = inserted.prefix_id
      LEFT JOIN sites ps ON ps.id = p.site_id
@@ -276,4 +292,55 @@ export async function createIpInDb(input: CreateIpInput) {
   );
 
   return row ? mapIp(row) : null;
+}
+
+export async function updateIpInDb(input: UpdateIpInput) {
+  const row = await queryOne<IpRow>(
+    `WITH updated AS (
+       UPDATE ip_addresses
+       SET interface_id = $2::uuid,
+           role = COALESCE($3, role),
+           status = COALESCE($4, status),
+           description = $5
+       WHERE id::text = $1 OR address::text = $1
+       RETURNING id, prefix_id, interface_id, address, role, status, description
+     )
+     SELECT
+       updated.id,
+       updated.address::text,
+       p.prefix::text,
+       d.name AS device,
+       i.name AS interface,
+       COALESCE(ds.code, ps.code) AS site,
+       svc.name AS service,
+       updated.role,
+       updated.status,
+       updated.description
+     FROM updated
+     JOIN prefixes p ON p.id = updated.prefix_id
+     LEFT JOIN sites ps ON ps.id = p.site_id
+     LEFT JOIN interfaces i ON i.id = updated.interface_id
+     LEFT JOIN devices d ON d.id = i.device_id
+     LEFT JOIN sites ds ON ds.id = d.site_id
+     LEFT JOIN service_endpoints se ON se.ip_address_id = updated.id
+     LEFT JOIN services svc ON svc.id = se.service_id`,
+    [input.id, input.interfaceId ?? null, input.role ?? null, input.status ?? null, input.description ?? null]
+  );
+
+  return row ? mapIp(row) : null;
+}
+
+export async function deleteIpInDb(id: string) {
+  const row = await queryOne<{ id: string }>(
+    `DELETE FROM ip_addresses
+     WHERE (id::text = $1 OR address::text = $1)
+       AND NOT EXISTS (SELECT 1 FROM service_endpoints WHERE ip_address_id = ip_addresses.id)
+       AND NOT EXISTS (SELECT 1 FROM documents WHERE object_type = 'ip_address' AND object_id = ip_addresses.id)
+       AND NOT EXISTS (SELECT 1 FROM evidence_files WHERE object_type = 'ip_address' AND object_id = ip_addresses.id)
+       AND NOT EXISTS (SELECT 1 FROM incident_impacts WHERE object_type = 'ip_address' AND object_id = ip_addresses.id)
+     RETURNING id`,
+    [id]
+  );
+
+  return row ?? null;
 }

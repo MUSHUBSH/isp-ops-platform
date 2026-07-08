@@ -751,7 +751,23 @@ function ResourcesView({ onReload, prefixes, sites }: { onReload: () => Promise<
 
 function IpamView({ interfaces, ips, onReload, prefixes }: { interfaces: NetworkInterface[]; ips: IpAssignment[]; onReload: () => Promise<void>; prefixes: Prefix[] }) {
   const [ipForm, setIpForm] = useState({ address: "", prefix: prefixes[0]?.prefix ?? "", interfaceId: interfaces[0]?.id ?? "", role: "management", status: "assigned", description: "" });
+  const [selectedIpId, setSelectedIpId] = useState(ips[0]?.id ?? "");
+  const selectedIp = ips.find((ip) => ip.id === selectedIpId) ?? ips[0];
+  const selectedIpInterfaceId = selectedIp ? interfaces.find((item) => item.device === selectedIp.device && item.name === selectedIp.interface)?.id ?? "" : "";
+  const [ipEditForm, setIpEditForm] = useState({ interfaceId: selectedIpInterfaceId, role: selectedIp?.role ?? "management", status: selectedIp?.status ?? "assigned", description: selectedIp?.description ?? "" });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  useEffect(() => {
+    if (selectedIp) {
+      const nextInterfaceId = interfaces.find((item) => item.device === selectedIp.device && item.name === selectedIp.interface)?.id ?? "";
+      setIpEditForm({
+        interfaceId: nextInterfaceId,
+        role: selectedIp.role,
+        status: selectedIp.status,
+        description: selectedIp.description ?? ""
+      });
+    }
+  }, [interfaces, selectedIp]);
 
   async function createIp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -768,6 +784,40 @@ function IpamView({ interfaces, ips, onReload, prefixes }: { interfaces: Network
         reason: "Asignacion IP desde modulo IPAM"
       });
       setIpForm((current) => ({ ...current, address: "", description: "" }));
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateIp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedIp) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/ipam/addresses/${selectedIp.id}`, {
+        interfaceId: ipEditForm.interfaceId || null,
+        role: ipEditForm.role,
+        status: ipEditForm.status,
+        description: ipEditForm.description || null,
+        reason: "Edicion desde modulo IPAM"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function deleteIp() {
+    if (!selectedIp) return;
+    setFormState("saving");
+
+    try {
+      await apiDelete(`/ipam/addresses/${selectedIp.id}`);
+      setSelectedIpId("");
       await onReload();
       setFormState("saved");
     } catch {
@@ -833,16 +883,54 @@ function IpamView({ interfaces, ips, onReload, prefixes }: { interfaces: Network
             </div>
           </div>
           <DataTable
-            columns={["IP", "Equipo", "Interfaz", "Servicio", "Estado"]}
-            statusColumnIndex={4}
+            columns={["IP", "Equipo", "Interfaz", "Rol", "Servicio", "Estado"]}
+            statusColumnIndex={5}
             rows={ips.map((ip) => [
               ip.address,
               ip.device ?? "pendiente",
               ip.interface ?? "pendiente",
+              ip.role,
               ip.service ?? "pendiente",
               ip.status
             ])}
           />
+        </div>
+        <div className="panel ipListPanel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">Operacion</p>
+              <h2>Editar IP</h2>
+            </div>
+          </div>
+          <form className="quickForm" onSubmit={updateIp}>
+            <label className="wideField">Direccion<select onChange={(event) => setSelectedIpId(event.target.value)} value={selectedIp?.id ?? ""}>
+              <option value="">Seleccionar</option>
+              {ips.map((ip) => <option key={ip.id} value={ip.id}>{ip.address} - {ip.device ?? ip.site}</option>)}
+            </select></label>
+            <label className="wideField">Interfaz<select disabled={!selectedIp} onChange={(event) => setIpEditForm((current) => ({ ...current, interfaceId: event.target.value }))} value={ipEditForm.interfaceId}>
+              <option value="">Sin interfaz</option>
+              {interfaces.map((networkInterface) => <option key={networkInterface.id} value={networkInterface.id}>{networkInterface.device} {networkInterface.name} - {networkInterface.siteCode}</option>)}
+            </select></label>
+            <label>Rol<select disabled={!selectedIp} onChange={(event) => setIpEditForm((current) => ({ ...current, role: event.target.value }))} value={ipEditForm.role}>
+              <option value="management">Gestion</option>
+              <option value="loopback">Loopback</option>
+              <option value="transport">Transporte</option>
+              <option value="customer">Cliente</option>
+              <option value="service">Servicio</option>
+              <option value="unknown">Desconocido</option>
+            </select></label>
+            <label>Estado<select disabled={!selectedIp} onChange={(event) => setIpEditForm((current) => ({ ...current, status: event.target.value }))} value={ipEditForm.status}>
+              <option value="assigned">Asignada</option>
+              <option value="reserved">Reservada</option>
+              <option value="active">Activa</option>
+              <option value="deprecated">Deprecada</option>
+              <option value="undocumented">Sin documentar</option>
+            </select></label>
+            <label className="wideField">Descripcion<input disabled={!selectedIp} onChange={(event) => setIpEditForm((current) => ({ ...current, description: event.target.value }))} value={ipEditForm.description} /></label>
+            <button disabled={!selectedIp} type="submit">Guardar IP</button>
+            <button className="dangerButton" disabled={!selectedIp} onClick={() => void deleteIp()} type="button">Eliminar IP</button>
+            <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+          </form>
         </div>
       </section>
     </ModulePage>
