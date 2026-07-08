@@ -353,11 +353,32 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
     providerId: providers[0]?.id ?? "",
     status: providers[0]?.status ?? "active"
   });
+  const [providerEditForm, setProviderEditForm] = useState({
+    code: providers[0]?.code ?? "",
+    name: providers[0]?.name ?? "",
+    providerType: providers[0]?.type ?? "transport",
+    status: providers[0]?.status ?? "active",
+    nocEmail: providers[0]?.nocEmail ?? "",
+    nocPhone: providers[0]?.nocPhone ?? ""
+  });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const selectedContract = contracts.find((contract) => contract.id === operationForm.contractId);
   const selectedProvider = providers.find((provider) => provider.id === providerOperationForm.providerId);
   const totalCost = contracts.reduce((sum, contract) => sum + (contract.monthlyCost ?? 0), 0);
   const activeContracts = contracts.filter((contract) => contract.status === "active").length;
+
+  useEffect(() => {
+    if (selectedProvider) {
+      setProviderEditForm({
+        code: selectedProvider.code,
+        name: selectedProvider.name,
+        providerType: selectedProvider.type,
+        status: selectedProvider.status,
+        nocEmail: selectedProvider.nocEmail ?? "",
+        nocPhone: selectedProvider.nocPhone ?? ""
+      });
+    }
+  }, [selectedProvider]);
 
   async function createContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -435,15 +456,20 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
     }
   }
 
-  async function updateProviderStatus(event: FormEvent<HTMLFormElement>) {
+  async function updateProvider(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedProvider) return;
     setFormState("saving");
 
     try {
-      await apiPatch(`/providers/${selectedProvider.id}/status`, {
-        status: providerOperationForm.status,
-        reason: "Actualizacion desde modulo Proveedores"
+      await apiPatch(`/providers/${selectedProvider.id}`, {
+        code: providerEditForm.code,
+        name: providerEditForm.name,
+        providerType: providerEditForm.providerType,
+        status: providerEditForm.status,
+        nocEmail: providerEditForm.nocEmail || null,
+        nocPhone: providerEditForm.nocPhone || null,
+        reason: "Edicion completa desde modulo Proveedores"
       });
       await onReload();
       setFormState("saved");
@@ -483,6 +509,7 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
             </div>
             <dl>
               <div><dt>NOC</dt><dd>{provider.nocEmail}</dd></div>
+              <div><dt>Telefono</dt><dd>{provider.nocPhone ?? "N/D"}</dd></div>
               <div><dt>Circuitos</dt><dd>{provider.activeCircuits}</dd></div>
               <div><dt>Disponibilidad 30d</dt><dd>{provider.availability30d}%</dd></div>
               <div><dt>MTTR 30d</dt><dd>{provider.mttrHours30d}h</dd></div>
@@ -527,8 +554,8 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
           </form>
         </div>
         <div className="panel">
-          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Estado proveedor</h2></div></div>
-          <form className="quickForm" onSubmit={updateProviderStatus}>
+          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Editar proveedor</h2></div></div>
+          <form className="quickForm" onSubmit={updateProvider}>
             <label className="wideField">Proveedor<select onChange={(event) => {
               const provider = providers.find((item) => item.id === event.target.value);
               setProviderOperationForm({ providerId: event.target.value, status: provider?.status ?? "active" });
@@ -536,8 +563,19 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
               <option value="">Selecciona proveedor</option>
               {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.code} - {provider.name}</option>)}
             </select></label>
-            <label>Estado<select onChange={(event) => setProviderOperationForm((current) => ({ ...current, status: event.target.value }))} value={providerOperationForm.status}><option value="active">active</option><option value="planned">planned</option><option value="suspended">suspended</option><option value="retired">retired</option></select></label>
-            <button disabled={!selectedProvider} type="submit">Actualizar proveedor</button>
+            <label>Codigo<input onChange={(event) => setProviderEditForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={providerEditForm.code} /></label>
+            <label>Tipo<select onChange={(event) => setProviderEditForm((current) => ({ ...current, providerType: event.target.value }))} value={providerEditForm.providerType}>
+              <option value="transport">transport</option>
+              <option value="internet_transit">internet_transit</option>
+              <option value="fiber_owner">fiber_owner</option>
+              <option value="tower">tower</option>
+              <option value="energy">energy</option>
+            </select></label>
+            <label>Estado<select onChange={(event) => setProviderEditForm((current) => ({ ...current, status: event.target.value }))} value={providerEditForm.status}><option value="active">active</option><option value="planned">planned</option><option value="suspended">suspended</option><option value="retired">retired</option></select></label>
+            <label className="wideField">Nombre<input onChange={(event) => setProviderEditForm((current) => ({ ...current, name: event.target.value }))} value={providerEditForm.name} /></label>
+            <label className="wideField">NOC email<input onChange={(event) => setProviderEditForm((current) => ({ ...current, nocEmail: event.target.value }))} value={providerEditForm.nocEmail} /></label>
+            <label>NOC telefono<input onChange={(event) => setProviderEditForm((current) => ({ ...current, nocPhone: event.target.value }))} value={providerEditForm.nocPhone} /></label>
+            <button disabled={!selectedProvider || !providerEditForm.code || !providerEditForm.name} type="submit">Guardar proveedor</button>
             <button className="dangerButton" disabled={!selectedProvider} onClick={() => void deleteProvider()} type="button">Eliminar si no tiene dependencias</button>
           </form>
         </div>

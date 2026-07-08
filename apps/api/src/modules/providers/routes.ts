@@ -3,7 +3,7 @@ import { z } from "zod";
 import { recordAuditEvent } from "../../shared/audit-service.js";
 import { actorId, requirePermission } from "../../shared/auth.js";
 import { contracts, providers } from "../../shared/demo-data.js";
-import { createContractInDb, createProviderInDb, deleteContractInDb, deleteProviderInDb, getProviderFromDb, listContractsByProviderFromDb, listContractsFromDb, listProvidersFromDb, updateContractStatusInDb, updateProviderStatusInDb } from "./repository.js";
+import { createContractInDb, createProviderInDb, deleteContractInDb, deleteProviderInDb, getProviderFromDb, listContractsByProviderFromDb, listContractsFromDb, listProvidersFromDb, updateContractStatusInDb, updateProviderInDb, updateProviderStatusInDb } from "./repository.js";
 
 const createProviderSchema = z.object({
   code: z.string().min(2).max(32).toUpperCase(),
@@ -30,6 +30,10 @@ const createContractSchema = z.object({
 
 const updateContractStatusSchema = z.object({
   status: z.string().min(2).max(40),
+  reason: z.string().max(500).nullable().optional()
+});
+
+const updateProviderSchema = createProviderSchema.partial().omit({ reason: true }).extend({
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -84,6 +88,32 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ provider });
+  });
+
+  app.patch("/providers/:id", { preHandler: requirePermission("providers.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateProviderSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid provider payload", issues: parsed.error.issues });
+    }
+
+    const provider = await updateProviderInDb({ id, ...parsed.data });
+
+    if (!provider) {
+      return reply.code(409).send({ message: "Provider not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "provider.updated",
+      objectType: "provider",
+      objectId: provider.id,
+      afterData: provider,
+      reason: parsed.data.reason ?? "Actualizacion de proveedor"
+    });
+
+    return { provider };
   });
 
   app.patch("/providers/:id/status", { preHandler: requirePermission("providers.write") }, async (request, reply) => {

@@ -122,6 +122,7 @@ export type Provider = {
   type: string;
   status: string;
   nocEmail: string;
+  nocPhone?: string;
   activeCircuits: number;
   availability30d: number;
   mttrHours30d: number;

@@ -7,6 +7,7 @@ type ProviderRow = {
   provider_type: string;
   status: string;
   noc_email: string | null;
+  noc_phone: string | null;
   active_circuits: string;
 };
 
@@ -32,6 +33,10 @@ export type CreateProviderInput = {
   nocPhone?: string | null;
 };
 
+export type UpdateProviderInput = Partial<CreateProviderInput> & {
+  id: string;
+};
+
 export type CreateContractInput = {
   providerCode: string;
   code: string;
@@ -52,6 +57,7 @@ function mapProvider(row: ProviderRow) {
     type: row.provider_type,
     status: row.status,
     nocEmail: row.noc_email ?? "",
+    nocPhone: row.noc_phone ?? "",
     activeCircuits: Number(row.active_circuits ?? 0),
     availability30d: 0,
     mttrHours30d: 0
@@ -82,6 +88,7 @@ export async function listProvidersFromDb() {
        p.provider_type,
        p.status,
        p.noc_email,
+       p.noc_phone,
        COUNT(c.id) AS active_circuits
      FROM providers p
      LEFT JOIN circuits c ON c.provider_id = p.id AND c.status <> 'retired'
@@ -101,6 +108,7 @@ export async function getProviderFromDb(id: string) {
        p.provider_type,
        p.status,
        p.noc_email,
+       p.noc_phone,
        COUNT(c.id) AS active_circuits
      FROM providers p
      LEFT JOIN circuits c ON c.provider_id = p.id AND c.status <> 'retired'
@@ -116,8 +124,54 @@ export async function createProviderInDb(input: CreateProviderInput) {
   const row = await queryOne<ProviderRow>(
     `INSERT INTO providers (code, name, provider_type, status, noc_email, noc_phone)
      VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, code, name, provider_type, status, noc_email, 0 AS active_circuits`,
+     RETURNING id, code, name, provider_type, status, noc_email, noc_phone, 0 AS active_circuits`,
     [input.code, input.name, input.providerType, input.status ?? "active", input.nocEmail ?? null, input.nocPhone ?? null]
+  );
+
+  return row ? mapProvider(row) : null;
+}
+
+export async function updateProviderInDb(input: UpdateProviderInput) {
+  const hasCode = Object.hasOwn(input, "code");
+  const hasName = Object.hasOwn(input, "name");
+  const hasProviderType = Object.hasOwn(input, "providerType");
+  const hasStatus = Object.hasOwn(input, "status");
+  const hasNocEmail = Object.hasOwn(input, "nocEmail");
+  const hasNocPhone = Object.hasOwn(input, "nocPhone");
+  const row = await queryOne<ProviderRow>(
+    `UPDATE providers p
+     SET
+       code = CASE WHEN $8 THEN $2 ELSE code END,
+       name = CASE WHEN $9 THEN $3 ELSE name END,
+       provider_type = CASE WHEN $10 THEN $4 ELSE provider_type END,
+       status = CASE WHEN $11 THEN $5 ELSE status END,
+       noc_email = CASE WHEN $12 THEN $6 ELSE noc_email END,
+       noc_phone = CASE WHEN $13 THEN $7 ELSE noc_phone END
+     WHERE p.id::text = $1 OR p.code = $1
+     RETURNING
+       p.id,
+       p.code,
+       p.name,
+       p.provider_type,
+       p.status,
+       p.noc_email,
+       p.noc_phone,
+       (SELECT COUNT(*) FROM circuits c WHERE c.provider_id = p.id AND c.status <> 'retired') AS active_circuits`,
+    [
+      input.id,
+      input.code ?? null,
+      input.name ?? null,
+      input.providerType ?? null,
+      input.status ?? null,
+      input.nocEmail ?? null,
+      input.nocPhone ?? null,
+      hasCode,
+      hasName,
+      hasProviderType,
+      hasStatus,
+      hasNocEmail,
+      hasNocPhone
+    ]
   );
 
   return row ? mapProvider(row) : null;
@@ -135,6 +189,7 @@ export async function updateProviderStatusInDb(id: string, status: string) {
        p.provider_type,
        p.status,
        p.noc_email,
+       p.noc_phone,
        (SELECT COUNT(*) FROM circuits c WHERE c.provider_id = p.id AND c.status <> 'retired') AS active_circuits`,
     [id, status]
   );
