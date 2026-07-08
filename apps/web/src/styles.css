@@ -1680,6 +1680,7 @@ h2 {
   padding: 11px;
 }
 
+.powerFeedList article.selectedMiniItem,
 .powerAssetList article.selectedMiniItem {
   border-color: #3bcda6;
   background: #0f2425;
@@ -1720,6 +1721,19 @@ h2 {
   border-radius: 6px;
   background: rgba(239, 91, 91, 0.08);
   color: #ffc9c9;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 9px;
+}
+
+.smallGhost {
+  width: fit-content;
+  height: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: rgba(120, 170, 180, 0.08);
+  color: var(--text);
   cursor: pointer;
   font-size: 12px;
   font-weight: 800;

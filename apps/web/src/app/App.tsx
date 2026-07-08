@@ -2624,6 +2624,9 @@ function RacksPowerView({
   const [selectedRackId, setSelectedRackId] = useState(siteRacks[0]?.id ?? "");
   const [rackForm, setRackForm] = useState({ code: "", name: "", heightU: "45" });
   const [powerForm, setPowerForm] = useState({ name: "", capacityWatts: "", loadWatts: "", source: "" });
+  const [selectedPowerFeedId, setSelectedPowerFeedId] = useState(sitePowerFeeds[0]?.id ?? "");
+  const selectedPowerFeed = sitePowerFeeds.find((feed) => feed.id === selectedPowerFeedId);
+  const [powerEditForm, setPowerEditForm] = useState({ name: "", feedType: "ac", status: "active", capacityWatts: "", loadWatts: "", source: "" });
   const [assetForm, setAssetForm] = useState({ name: "", assetType: "ups", capacityWatts: "", loadWatts: "", autonomyMinutes: "", batteryHealthPercent: "", sourceFeedId: "", notes: "" });
   const [selectedPowerAssetId, setSelectedPowerAssetId] = useState(sitePowerAssets[0]?.id ?? "");
   const selectedPowerAsset = sitePowerAssets.find((asset) => asset.id === selectedPowerAssetId);
@@ -2652,6 +2655,26 @@ function RacksPowerView({
       setSelectedPowerAssetId(sitePowerAssets[0]?.id ?? "");
     }
   }, [selectedPowerAssetId, sitePowerAssets]);
+
+  useEffect(() => {
+    const currentFeedBelongsToSite = sitePowerFeeds.some((feed) => feed.id === selectedPowerFeedId);
+    if (!currentFeedBelongsToSite) {
+      setSelectedPowerFeedId(sitePowerFeeds[0]?.id ?? "");
+    }
+  }, [selectedPowerFeedId, sitePowerFeeds]);
+
+  useEffect(() => {
+    if (selectedPowerFeed) {
+      setPowerEditForm({
+        name: selectedPowerFeed.name,
+        feedType: selectedPowerFeed.feedType,
+        status: selectedPowerFeed.status,
+        capacityWatts: selectedPowerFeed.capacityWatts ? String(selectedPowerFeed.capacityWatts) : "",
+        loadWatts: selectedPowerFeed.loadWatts ? String(selectedPowerFeed.loadWatts) : "",
+        source: selectedPowerFeed.source ?? ""
+      });
+    }
+  }, [selectedPowerFeed]);
 
   useEffect(() => {
     if (selectedPowerAsset) {
@@ -2721,6 +2744,29 @@ function RacksPowerView({
     setCrudState("saving");
     try {
       await apiDelete(`/sites/${activeSiteCode}/power-feeds/${id}`);
+      setSelectedPowerFeedId("");
+      await onReload();
+      setCrudState("saved");
+    } catch {
+      setCrudState("error");
+    }
+  }
+
+  async function updatePowerFeed(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPowerFeed) return;
+    setCrudState("saving");
+
+    try {
+      await apiPatch(`/sites/${activeSiteCode}/power-feeds/${selectedPowerFeed.id}`, {
+        name: powerEditForm.name,
+        feedType: powerEditForm.feedType,
+        status: powerEditForm.status,
+        capacityWatts: powerEditForm.capacityWatts ? Number(powerEditForm.capacityWatts) : null,
+        loadWatts: powerEditForm.loadWatts ? Number(powerEditForm.loadWatts) : null,
+        source: powerEditForm.source || null,
+        reason: "Edicion de alimentacion electrica desde vista de racks"
+      });
       await onReload();
       setCrudState("saved");
     } catch {
@@ -2881,7 +2927,7 @@ function RacksPowerView({
             {sitePowerFeeds.map((feed) => {
               const percent = feed.capacityWatts ? Math.round(((feed.loadWatts ?? 0) / feed.capacityWatts) * 100) : 0;
               return (
-                <article key={feed.id}>
+                <article className={selectedPowerFeed?.id === feed.id ? "selectedMiniItem" : ""} key={feed.id}>
                   <div>
                     <strong>{feed.name}</strong>
                     <span>{feed.feedType} - {feed.source ?? "sin fuente"}</span>
@@ -2889,12 +2935,39 @@ function RacksPowerView({
                   <small className={`statusText ${feed.status}`}>{feed.status}</small>
                   <div className="powerBar"><span style={{ width: `${Math.min(percent, 100)}%` }} /></div>
                   <em>{feed.loadWatts ?? 0}W / {feed.capacityWatts ?? 0}W</em>
+                  <button className="smallGhost" onClick={() => setSelectedPowerFeedId(feed.id)} type="button">Editar</button>
                   <button className="smallDanger" onClick={() => void deletePowerFeed(feed.id)} type="button">Eliminar</button>
                 </article>
               );
             })}
             {sitePowerFeeds.length === 0 && <span className="mutedText">Sin alimentaciones documentadas en esta sede</span>}
           </div>
+          {selectedPowerFeed && (
+            <form className="quickForm" onSubmit={updatePowerFeed}>
+              <p className="eyebrow">Editar alimentacion</p>
+              <label>Feed<select onChange={(event) => setSelectedPowerFeedId(event.target.value)} value={selectedPowerFeedId}>
+                {sitePowerFeeds.map((feed) => <option key={feed.id} value={feed.id}>{feed.name}</option>)}
+              </select></label>
+              <label>Nombre<input onChange={(event) => setPowerEditForm((current) => ({ ...current, name: event.target.value }))} value={powerEditForm.name} /></label>
+              <label>Tipo<select onChange={(event) => setPowerEditForm((current) => ({ ...current, feedType: event.target.value }))} value={powerEditForm.feedType}>
+                <option value="ac">AC</option>
+                <option value="dc">DC</option>
+                <option value="ups">UPS</option>
+                <option value="generator">Generador</option>
+              </select></label>
+              <label>Estado<select onChange={(event) => setPowerEditForm((current) => ({ ...current, status: event.target.value }))} value={powerEditForm.status}>
+                <option value="active">Activo</option>
+                <option value="maintenance">Mantenimiento</option>
+                <option value="degraded">Degradado</option>
+                <option value="offline">Fuera de servicio</option>
+              </select></label>
+              <label>Capacidad W<input inputMode="numeric" onChange={(event) => setPowerEditForm((current) => ({ ...current, capacityWatts: event.target.value }))} value={powerEditForm.capacityWatts} /></label>
+              <label>Carga W<input inputMode="numeric" onChange={(event) => setPowerEditForm((current) => ({ ...current, loadWatts: event.target.value }))} value={powerEditForm.loadWatts} /></label>
+              <label className="wideField">Fuente<input onChange={(event) => setPowerEditForm((current) => ({ ...current, source: event.target.value }))} value={powerEditForm.source} /></label>
+              <button type="submit">Guardar alimentacion</button>
+              <span className={`formState ${crudState}`}>{formStateLabel(crudState)}</span>
+            </form>
+          )}
           <form className="quickForm" onSubmit={createPowerFeed}>
             <p className="eyebrow">Nueva alimentacion</p>
             <label>Nombre<input onChange={(event) => setPowerForm((current) => ({ ...current, name: event.target.value }))} value={powerForm.name} /></label>
