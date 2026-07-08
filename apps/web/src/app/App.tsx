@@ -2623,6 +2623,7 @@ function RacksPowerView({
   const sitePowerAssets = useMemo(() => powerAssets.filter((asset) => asset.siteCode === activeSiteCode), [activeSiteCode, powerAssets]);
   const [selectedRackId, setSelectedRackId] = useState(siteRacks[0]?.id ?? "");
   const [rackForm, setRackForm] = useState({ code: "", name: "", heightU: "45" });
+  const [rackEditForm, setRackEditForm] = useState({ code: "", name: "", heightU: "" });
   const [powerForm, setPowerForm] = useState({ name: "", capacityWatts: "", loadWatts: "", source: "" });
   const [selectedPowerFeedId, setSelectedPowerFeedId] = useState(sitePowerFeeds[0]?.id ?? "");
   const selectedPowerFeed = sitePowerFeeds.find((feed) => feed.id === selectedPowerFeedId);
@@ -2639,6 +2640,16 @@ function RacksPowerView({
   const totalLoad = sitePowerFeeds.reduce((sum, feed) => sum + (feed.loadWatts ?? 0), 0);
   const totalCapacity = sitePowerFeeds.reduce((sum, feed) => sum + (feed.capacityWatts ?? 0), 0);
   const utilization = totalCapacity > 0 ? Math.round((totalLoad / totalCapacity) * 100) : 0;
+
+  useEffect(() => {
+    if (selectedRack) {
+      setRackEditForm({
+        code: selectedRack.code,
+        name: selectedRack.name,
+        heightU: String(selectedRack.heightU)
+      });
+    }
+  }, [selectedRack]);
 
   useEffect(() => {
     const currentRackBelongsToSite = siteRacks.some((rack) => rack.id === selectedRackId);
@@ -2714,6 +2725,25 @@ function RacksPowerView({
     setCrudState("saving");
     try {
       await apiDelete(`/sites/${activeSiteCode}/racks/${id}`);
+      await onReload();
+      setCrudState("saved");
+    } catch {
+      setCrudState("error");
+    }
+  }
+
+  async function updateRack(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRack) return;
+    setCrudState("saving");
+
+    try {
+      await apiPatch(`/sites/${activeSiteCode}/racks/${selectedRack.id}`, {
+        code: rackEditForm.code,
+        name: rackEditForm.name,
+        heightU: Number(rackEditForm.heightU),
+        reason: "Edicion de rack desde vista fisica"
+      });
       await onReload();
       setCrudState("saved");
     } catch {
@@ -2886,6 +2916,16 @@ function RacksPowerView({
             ))}
             {siteRacks.length === 0 && <span className="mutedText">Sin racks registrados en esta sede</span>}
           </div>
+          {selectedRack && (
+            <form className="quickForm" onSubmit={updateRack}>
+              <p className="eyebrow">Editar rack</p>
+              <label>Codigo<input onChange={(event) => setRackEditForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={rackEditForm.code} /></label>
+              <label>RU<input inputMode="numeric" onChange={(event) => setRackEditForm((current) => ({ ...current, heightU: event.target.value }))} value={rackEditForm.heightU} /></label>
+              <label className="wideField">Nombre<input onChange={(event) => setRackEditForm((current) => ({ ...current, name: event.target.value }))} value={rackEditForm.name} /></label>
+              <button type="submit">Guardar rack</button>
+              <span className={`formState ${crudState}`}>{formStateLabel(crudState)}</span>
+            </form>
+          )}
           <form className="quickForm" onSubmit={createRack}>
             <p className="eyebrow">Nuevo rack</p>
             <label>Codigo<input onChange={(event) => setRackForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={rackForm.code} /></label>
