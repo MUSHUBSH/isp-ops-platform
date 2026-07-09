@@ -49,6 +49,10 @@ export type CreateContractInput = {
   slaTarget?: number | null;
 };
 
+export type UpdateContractInput = Partial<CreateContractInput> & {
+  id: string;
+};
+
 function mapProvider(row: ProviderRow) {
   return {
     id: row.id,
@@ -307,6 +311,67 @@ export async function updateContractStatusInDb(id: string, status: string) {
        c.monthly_cost,
        c.sla_target`,
     [id, status]
+  );
+
+  return row ? mapContract(row) : null;
+}
+
+export async function updateContractInDb(input: UpdateContractInput) {
+  const hasProviderCode = Object.hasOwn(input, "providerCode");
+  const hasCode = Object.hasOwn(input, "code");
+  const hasName = Object.hasOwn(input, "name");
+  const hasStatus = Object.hasOwn(input, "status");
+  const hasStartDate = Object.hasOwn(input, "startDate");
+  const hasEndDate = Object.hasOwn(input, "endDate");
+  const hasCurrency = Object.hasOwn(input, "currency");
+  const hasMonthlyCost = Object.hasOwn(input, "monthlyCost");
+  const hasSlaTarget = Object.hasOwn(input, "slaTarget");
+  const row = await queryOne<ContractRow>(
+    `UPDATE contracts c
+     SET
+       provider_id = CASE WHEN $11 THEN (SELECT id FROM providers WHERE code = $2) ELSE provider_id END,
+       code = CASE WHEN $12 THEN $3 ELSE code END,
+       name = CASE WHEN $13 THEN $4 ELSE name END,
+       status = CASE WHEN $14 THEN $5 ELSE status END,
+       start_date = CASE WHEN $15 THEN $6::date ELSE start_date END,
+       end_date = CASE WHEN $16 THEN $7::date ELSE end_date END,
+       currency = CASE WHEN $17 THEN $8 ELSE currency END,
+       monthly_cost = CASE WHEN $18 THEN $9 ELSE monthly_cost END,
+       sla_target = CASE WHEN $19 THEN $10 ELSE sla_target END
+     WHERE c.id = $1::uuid
+       AND (NOT $11 OR EXISTS (SELECT 1 FROM providers WHERE code = $2))
+     RETURNING
+       c.id,
+       (SELECT p.code FROM providers p WHERE p.id = c.provider_id) AS provider_code,
+       c.code,
+       c.name,
+       c.status,
+       c.start_date::text,
+       c.end_date::text,
+       c.currency,
+       c.monthly_cost,
+       c.sla_target`,
+    [
+      input.id,
+      input.providerCode ?? null,
+      input.code ?? null,
+      input.name ?? null,
+      input.status ?? null,
+      input.startDate ?? null,
+      input.endDate ?? null,
+      input.currency ?? null,
+      input.monthlyCost ?? null,
+      input.slaTarget ?? null,
+      hasProviderCode,
+      hasCode,
+      hasName,
+      hasStatus,
+      hasStartDate,
+      hasEndDate,
+      hasCurrency,
+      hasMonthlyCost,
+      hasSlaTarget
+    ]
   );
 
   return row ? mapContract(row) : null;

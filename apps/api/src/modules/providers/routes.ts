@@ -3,7 +3,7 @@ import { z } from "zod";
 import { recordAuditEvent } from "../../shared/audit-service.js";
 import { actorId, requirePermission } from "../../shared/auth.js";
 import { contracts, providers } from "../../shared/demo-data.js";
-import { createContractInDb, createProviderInDb, deleteContractInDb, deleteProviderInDb, getProviderFromDb, listContractsByProviderFromDb, listContractsFromDb, listProvidersFromDb, updateContractStatusInDb, updateProviderInDb, updateProviderStatusInDb } from "./repository.js";
+import { createContractInDb, createProviderInDb, deleteContractInDb, deleteProviderInDb, getProviderFromDb, listContractsByProviderFromDb, listContractsFromDb, listProvidersFromDb, updateContractInDb, updateContractStatusInDb, updateProviderInDb, updateProviderStatusInDb } from "./repository.js";
 
 const createProviderSchema = z.object({
   code: z.string().min(2).max(32).toUpperCase(),
@@ -34,6 +34,10 @@ const updateContractStatusSchema = z.object({
 });
 
 const updateProviderSchema = createProviderSchema.partial().omit({ reason: true }).extend({
+  reason: z.string().max(500).nullable().optional()
+});
+
+const updateContractSchema = createContractSchema.partial().omit({ reason: true }).extend({
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -184,6 +188,32 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ contract });
+  });
+
+  app.patch("/providers/contracts/:id", { preHandler: requirePermission("providers.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateContractSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid contract payload", issues: parsed.error.issues });
+    }
+
+    const contract = await updateContractInDb({ id, ...parsed.data });
+
+    if (!contract) {
+      return reply.code(409).send({ message: "Contract not found, provider not found, or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "contract.updated",
+      objectType: "contract",
+      objectId: contract.id,
+      afterData: contract,
+      reason: parsed.data.reason ?? "Actualizacion de contrato"
+    });
+
+    return { contract };
   });
 
   app.patch("/providers/contracts/:id/status", { preHandler: requirePermission("providers.write") }, async (request, reply) => {

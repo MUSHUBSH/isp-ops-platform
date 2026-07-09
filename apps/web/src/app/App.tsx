@@ -349,6 +349,17 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
     contractId: contracts[0]?.id ?? "",
     status: contracts[0]?.status ?? "active"
   });
+  const [contractEditForm, setContractEditForm] = useState({
+    providerCode: contracts[0]?.providerCode ?? providers[0]?.code ?? "",
+    code: contracts[0]?.code ?? "",
+    name: contracts[0]?.name ?? "",
+    monthlyCost: contracts[0]?.monthlyCost ? String(contracts[0].monthlyCost) : "",
+    currency: contracts[0]?.currency ?? "USD",
+    slaTarget: contracts[0]?.slaTarget ? String(contracts[0].slaTarget) : "99.9",
+    status: contracts[0]?.status ?? "active",
+    startDate: contracts[0]?.startDate?.slice(0, 10) ?? "",
+    endDate: contracts[0]?.endDate?.slice(0, 10) ?? ""
+  });
   const [providerOperationForm, setProviderOperationForm] = useState({
     providerId: providers[0]?.id ?? "",
     status: providers[0]?.status ?? "active"
@@ -379,6 +390,22 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
       });
     }
   }, [selectedProvider]);
+
+  useEffect(() => {
+    if (selectedContract) {
+      setContractEditForm({
+        providerCode: selectedContract.providerCode,
+        code: selectedContract.code,
+        name: selectedContract.name,
+        monthlyCost: selectedContract.monthlyCost ? String(selectedContract.monthlyCost) : "",
+        currency: selectedContract.currency ?? "USD",
+        slaTarget: selectedContract.slaTarget ? String(selectedContract.slaTarget) : "99.9",
+        status: selectedContract.status,
+        startDate: selectedContract.startDate?.slice(0, 10) ?? "",
+        endDate: selectedContract.endDate?.slice(0, 10) ?? ""
+      });
+    }
+  }, [selectedContract]);
 
   async function createContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -425,15 +452,23 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
     }
   }
 
-  async function updateContractStatus(event: FormEvent<HTMLFormElement>) {
+  async function updateContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedContract) return;
     setFormState("saving");
 
     try {
-      await apiPatch(`/providers/contracts/${selectedContract.id}/status`, {
-        status: operationForm.status,
-        reason: "Actualizacion desde modulo Proveedores"
+      await apiPatch(`/providers/contracts/${selectedContract.id}`, {
+        providerCode: contractEditForm.providerCode,
+        code: contractEditForm.code,
+        name: contractEditForm.name,
+        monthlyCost: contractEditForm.monthlyCost ? Number(contractEditForm.monthlyCost) : null,
+        currency: contractEditForm.currency || null,
+        slaTarget: contractEditForm.slaTarget ? Number(contractEditForm.slaTarget) : null,
+        status: contractEditForm.status,
+        startDate: contractEditForm.startDate || null,
+        endDate: contractEditForm.endDate || null,
+        reason: "Edicion completa desde modulo Proveedores"
       });
       await onReload();
       setFormState("saved");
@@ -580,8 +615,8 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
           </form>
         </div>
         <div className="panel">
-          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Estado contrato</h2></div></div>
-          <form className="quickForm" onSubmit={updateContractStatus}>
+          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Editar contrato</h2></div></div>
+          <form className="quickForm" onSubmit={updateContract}>
             <label className="wideField">Contrato<select onChange={(event) => {
               const contract = contracts.find((item) => item.id === event.target.value);
               setOperationForm({ contractId: event.target.value, status: contract?.status ?? "active" });
@@ -589,8 +624,18 @@ function ProvidersView({ contracts, onReload, providers }: { contracts: Provider
               <option value="">Selecciona contrato</option>
               {contracts.map((contract) => <option key={contract.id} value={contract.id}>{contract.providerCode} - {contract.code}</option>)}
             </select></label>
-            <label>Estado<select onChange={(event) => setOperationForm((current) => ({ ...current, status: event.target.value }))} value={operationForm.status}><option value="active">active</option><option value="draft">draft</option><option value="expired">expired</option><option value="cancelled">cancelled</option></select></label>
-            <button disabled={!selectedContract} type="submit">Actualizar estado</button>
+            <label>Proveedor<select onChange={(event) => setContractEditForm((current) => ({ ...current, providerCode: event.target.value }))} value={contractEditForm.providerCode}>
+              {providers.map((provider) => <option key={provider.id} value={provider.code}>{provider.code}</option>)}
+            </select></label>
+            <label>Codigo<input onChange={(event) => setContractEditForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={contractEditForm.code} /></label>
+            <label className="wideField">Nombre<input onChange={(event) => setContractEditForm((current) => ({ ...current, name: event.target.value }))} value={contractEditForm.name} /></label>
+            <label>Costo mensual<input inputMode="decimal" onChange={(event) => setContractEditForm((current) => ({ ...current, monthlyCost: event.target.value }))} value={contractEditForm.monthlyCost} /></label>
+            <label>Moneda<input onChange={(event) => setContractEditForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} value={contractEditForm.currency} /></label>
+            <label>SLA %<input inputMode="decimal" onChange={(event) => setContractEditForm((current) => ({ ...current, slaTarget: event.target.value }))} value={contractEditForm.slaTarget} /></label>
+            <label>Inicio<input onChange={(event) => setContractEditForm((current) => ({ ...current, startDate: event.target.value }))} type="date" value={contractEditForm.startDate} /></label>
+            <label>Fin<input onChange={(event) => setContractEditForm((current) => ({ ...current, endDate: event.target.value }))} type="date" value={contractEditForm.endDate} /></label>
+            <label>Estado<select onChange={(event) => setContractEditForm((current) => ({ ...current, status: event.target.value }))} value={contractEditForm.status}><option value="active">active</option><option value="draft">draft</option><option value="expired">expired</option><option value="cancelled">cancelled</option></select></label>
+            <button disabled={!selectedContract || !contractEditForm.providerCode || !contractEditForm.code || !contractEditForm.name} type="submit">Guardar contrato</button>
             <button className="dangerButton" disabled={!selectedContract} onClick={() => void deleteContract()} type="button">Eliminar si no tiene dependencias</button>
           </form>
         </div>
