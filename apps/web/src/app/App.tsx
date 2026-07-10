@@ -2014,6 +2014,25 @@ function DatacenterView({
     color: "amarillo",
     status: "active"
   });
+  const [selectedPatchcordId, setSelectedPatchcordId] = useState(patchcords[0]?.id ?? "");
+  const selectedPatchcord = patchcords.find((patchcord) => patchcord.id === selectedPatchcordId);
+  const [patchEditForm, setPatchEditForm] = useState({
+    code: patchcords[0]?.code ?? "",
+    aDeviceName: patchcords[0]?.aDevice ?? "",
+    aInterfaceName: "",
+    zDeviceName: patchcords[0]?.zDevice ?? "",
+    zInterfaceName: "",
+    circuitCode: patchcords[0]?.circuitCode ?? "",
+    aEndpoint: patchcords[0]?.aEndpoint ?? "",
+    zEndpoint: patchcords[0]?.zEndpoint ?? "",
+    mediaType: patchcords[0]?.mediaType ?? "fiber",
+    connectorA: patchcords[0]?.connectorA ?? "LC/UPC",
+    connectorZ: patchcords[0]?.connectorZ ?? "LC/UPC",
+    lengthMeters: patchcords[0]?.lengthMeters ? String(patchcords[0].lengthMeters) : "",
+    fiberMode: patchcords[0]?.fiberMode ?? "SM",
+    color: patchcords[0]?.color ?? "amarillo",
+    status: patchcords[0]?.status ?? "active"
+  });
   const [assetForm, setAssetForm] = useState({
     siteCode: "AQP-POP",
     rackCode: "RACK-AQP-01",
@@ -2141,6 +2160,35 @@ function DatacenterView({
       });
     }
   }, [selectedTransceiver]);
+
+  useEffect(() => {
+    const currentPatchcordExists = patchcords.some((patchcord) => patchcord.id === selectedPatchcordId);
+    if (!currentPatchcordExists) {
+      setSelectedPatchcordId(patchcords[0]?.id ?? "");
+    }
+  }, [patchcords, selectedPatchcordId]);
+
+  useEffect(() => {
+    if (selectedPatchcord) {
+      setPatchEditForm({
+        code: selectedPatchcord.code,
+        aDeviceName: selectedPatchcord.aDevice ?? "",
+        aInterfaceName: "",
+        zDeviceName: selectedPatchcord.zDevice ?? "",
+        zInterfaceName: "",
+        circuitCode: selectedPatchcord.circuitCode ?? "",
+        aEndpoint: selectedPatchcord.aEndpoint,
+        zEndpoint: selectedPatchcord.zEndpoint,
+        mediaType: selectedPatchcord.mediaType,
+        connectorA: selectedPatchcord.connectorA,
+        connectorZ: selectedPatchcord.connectorZ,
+        lengthMeters: selectedPatchcord.lengthMeters ? String(selectedPatchcord.lengthMeters) : "",
+        fiberMode: selectedPatchcord.fiberMode ?? "",
+        color: selectedPatchcord.color ?? "",
+        status: selectedPatchcord.status
+      });
+    }
+  }, [selectedPatchcord]);
 
   async function savePhysical(event: FormEvent<HTMLFormElement>, path: string, payload: Record<string, unknown>, reset: () => void) {
     event.preventDefault();
@@ -2271,6 +2319,37 @@ function DatacenterView({
         rxPowerDbm: num(opticEditForm.rxPowerDbm),
         status: opticEditForm.status,
         reason: "Edicion de transceiver desde Datacenter"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updatePatchcord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPatchcord) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/physical/patchcords/${selectedPatchcord.id}`, {
+        code: patchEditForm.code,
+        aDeviceName: patchEditForm.aDeviceName || null,
+        aInterfaceName: patchEditForm.aInterfaceName || null,
+        zDeviceName: patchEditForm.zDeviceName || null,
+        zInterfaceName: patchEditForm.zInterfaceName || null,
+        circuitCode: patchEditForm.circuitCode || null,
+        aEndpoint: patchEditForm.aEndpoint,
+        zEndpoint: patchEditForm.zEndpoint,
+        mediaType: patchEditForm.mediaType,
+        connectorA: patchEditForm.connectorA,
+        connectorZ: patchEditForm.connectorZ,
+        lengthMeters: num(patchEditForm.lengthMeters),
+        fiberMode: patchEditForm.fiberMode || null,
+        color: patchEditForm.color || null,
+        status: patchEditForm.status,
+        reason: "Edicion de patchcord desde Datacenter"
       });
       await onReload();
       setFormState("saved");
@@ -2540,6 +2619,39 @@ function DatacenterView({
             <label>Circuito<input onChange={(event) => setPatchForm((current) => ({ ...current, circuitCode: event.target.value }))} value={patchForm.circuitCode} /></label>
             <button disabled={!patchForm.code || !patchForm.aEndpoint || !patchForm.zEndpoint} type="submit">Guardar patchcord</button>
           </form>
+          {selectedPatchcord && (
+            <form className="quickForm" onSubmit={updatePatchcord}>
+              <p className="eyebrow">Editar patchcord</p>
+              <label className="wideField">Patchcord<select onChange={(event) => setSelectedPatchcordId(event.target.value)} value={selectedPatchcordId}>
+                {patchcords.map((patchcord) => <option key={patchcord.id} value={patchcord.id}>{patchcord.code} - {patchcord.aEndpoint}</option>)}
+              </select></label>
+              <label>Codigo<input onChange={(event) => setPatchEditForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={patchEditForm.code} /></label>
+              <label>Medio<select onChange={(event) => setPatchEditForm((current) => ({ ...current, mediaType: event.target.value }))} value={patchEditForm.mediaType}>
+                <option value="fiber">fiber</option>
+                <option value="utp">utp</option>
+                <option value="dac">dac</option>
+              </select></label>
+              <label>Equipo A<input onChange={(event) => setPatchEditForm((current) => ({ ...current, aDeviceName: event.target.value }))} value={patchEditForm.aDeviceName} /></label>
+              <label>Puerto A<input onChange={(event) => setPatchEditForm((current) => ({ ...current, aInterfaceName: event.target.value }))} value={patchEditForm.aInterfaceName} /></label>
+              <label>Equipo Z<input onChange={(event) => setPatchEditForm((current) => ({ ...current, zDeviceName: event.target.value }))} value={patchEditForm.zDeviceName} /></label>
+              <label>Puerto Z<input onChange={(event) => setPatchEditForm((current) => ({ ...current, zInterfaceName: event.target.value }))} value={patchEditForm.zInterfaceName} /></label>
+              <label className="wideField">Extremo A<input onChange={(event) => setPatchEditForm((current) => ({ ...current, aEndpoint: event.target.value }))} value={patchEditForm.aEndpoint} /></label>
+              <label className="wideField">Extremo Z<input onChange={(event) => setPatchEditForm((current) => ({ ...current, zEndpoint: event.target.value }))} value={patchEditForm.zEndpoint} /></label>
+              <label>Conector A<input onChange={(event) => setPatchEditForm((current) => ({ ...current, connectorA: event.target.value }))} value={patchEditForm.connectorA} /></label>
+              <label>Conector Z<input onChange={(event) => setPatchEditForm((current) => ({ ...current, connectorZ: event.target.value }))} value={patchEditForm.connectorZ} /></label>
+              <label>Largo m<input inputMode="decimal" onChange={(event) => setPatchEditForm((current) => ({ ...current, lengthMeters: event.target.value }))} value={patchEditForm.lengthMeters} /></label>
+              <label>Modo<input onChange={(event) => setPatchEditForm((current) => ({ ...current, fiberMode: event.target.value }))} value={patchEditForm.fiberMode} /></label>
+              <label>Color<input onChange={(event) => setPatchEditForm((current) => ({ ...current, color: event.target.value }))} value={patchEditForm.color} /></label>
+              <label>Circuito<input onChange={(event) => setPatchEditForm((current) => ({ ...current, circuitCode: event.target.value.toUpperCase() }))} value={patchEditForm.circuitCode} /></label>
+              <label>Estado<select onChange={(event) => setPatchEditForm((current) => ({ ...current, status: event.target.value }))} value={patchEditForm.status}>
+                <option value="active">active</option>
+                <option value="planned">planned</option>
+                <option value="degraded">degraded</option>
+                <option value="retired">retired</option>
+              </select></label>
+              <button disabled={!patchEditForm.code || !patchEditForm.aEndpoint || !patchEditForm.zEndpoint} type="submit">Guardar patchcord</button>
+            </form>
+          )}
         </div>
 
         <div className="panel">

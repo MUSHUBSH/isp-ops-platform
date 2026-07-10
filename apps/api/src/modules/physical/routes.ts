@@ -27,6 +27,7 @@ import {
   resolvePhysicalKind,
   updateFiberSpanInDb,
   updateFiberStrandInDb,
+  updatePatchcordInDb,
   updateProviderCapacityInDb,
   updatePhysicalStatusInDb,
   updateTransceiverInDb
@@ -125,6 +126,10 @@ const patchcordSchema = z.object({
   fiberMode: nullableString,
   color: nullableString,
   status: z.string().trim().min(2).max(40).optional(),
+  reason: nullableString
+});
+
+const updatePatchcordSchema = patchcordSchema.partial().omit({ reason: true }).extend({
   reason: nullableString
 });
 
@@ -287,6 +292,18 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     if (!patchcord) return reply.code(503).send({ message: "PostgreSQL is required to create patchcords" });
     await auditCreated(request, "physical.patchcord.created", "patchcord", patchcord, patchcord, parsed.data.reason);
     return reply.code(201).send({ patchcord });
+  });
+
+  app.patch("/physical/patchcords/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updatePatchcordSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const patchcord = await updatePatchcordInDb({ id, ...parsed.data });
+    if (!patchcord) return reply.code(409).send({ message: "Patchcord not found, references invalid, or PostgreSQL is required" });
+
+    await auditMutation(request, "physical.patchcord.updated", "patchcord", patchcord.id, patchcord, parsed.data.reason);
+    return { patchcord };
   });
 
   app.post("/physical/datacenter-assets", { preHandler: requirePermission("physical.write") }, async (request, reply) => {

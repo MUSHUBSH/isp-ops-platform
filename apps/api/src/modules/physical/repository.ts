@@ -194,6 +194,10 @@ export type CreatePatchcordInput = {
   status?: string;
 };
 
+export type UpdatePatchcordInput = Partial<CreatePatchcordInput> & {
+  id: string;
+};
+
 export type CreateDatacenterAssetInput = {
   siteCode: string;
   rackCode?: string | null;
@@ -1066,6 +1070,140 @@ export async function createPatchcordInDb(input: CreatePatchcordInput) {
       input.fiberMode ?? null,
       input.color ?? null,
       input.status ?? "active"
+    ]
+  );
+
+  const row = rows?.[0];
+  return row
+    ? {
+        id: row.id,
+        code: row.code,
+        aEndpoint: row.a_endpoint,
+        zEndpoint: row.z_endpoint,
+        aDevice: row.a_device,
+        zDevice: row.z_device,
+        mediaType: row.media_type,
+        connectorA: row.connector_a,
+        connectorZ: row.connector_z,
+        lengthMeters: numberOrNull(row.length_meters),
+        fiberMode: row.fiber_mode,
+        color: row.color,
+        status: row.status,
+        circuitCode: row.circuit_code
+      }
+    : null;
+}
+
+export async function updatePatchcordInDb(input: UpdatePatchcordInput) {
+  const hasCode = Object.hasOwn(input, "code");
+  const hasADeviceName = Object.hasOwn(input, "aDeviceName");
+  const hasAInterfaceName = Object.hasOwn(input, "aInterfaceName");
+  const hasZDeviceName = Object.hasOwn(input, "zDeviceName");
+  const hasZInterfaceName = Object.hasOwn(input, "zInterfaceName");
+  const hasCircuitCode = Object.hasOwn(input, "circuitCode");
+  const hasAEndpoint = Object.hasOwn(input, "aEndpoint");
+  const hasZEndpoint = Object.hasOwn(input, "zEndpoint");
+  const hasMediaType = Object.hasOwn(input, "mediaType");
+  const hasConnectorA = Object.hasOwn(input, "connectorA");
+  const hasConnectorZ = Object.hasOwn(input, "connectorZ");
+  const hasLengthMeters = Object.hasOwn(input, "lengthMeters");
+  const hasFiberMode = Object.hasOwn(input, "fiberMode");
+  const hasColor = Object.hasOwn(input, "color");
+  const hasStatus = Object.hasOwn(input, "status");
+  const rows = await query<PatchcordRow>(
+    `WITH selected_a AS (
+       SELECT i.id
+       FROM devices d
+       JOIN interfaces i ON i.device_id = d.id
+       WHERE d.name = $3 AND i.name = $4
+     ), selected_z AS (
+       SELECT i.id
+       FROM devices d
+       JOIN interfaces i ON i.device_id = d.id
+       WHERE d.name = $5 AND i.name = $6
+     ), selected_circuit AS (
+       SELECT id, code FROM circuits WHERE code = $7
+     )
+     UPDATE patchcords pc
+     SET
+       code = CASE WHEN $17 THEN $2 ELSE pc.code END,
+       a_interface_id = CASE
+         WHEN ($18 OR $19) AND $3 IS NULL THEN NULL
+         WHEN ($18 OR $19) AND $4 IS NULL THEN NULL
+         WHEN ($18 OR $19) THEN (SELECT id FROM selected_a)
+         ELSE pc.a_interface_id
+       END,
+       z_interface_id = CASE
+         WHEN ($20 OR $21) AND $5 IS NULL THEN NULL
+         WHEN ($20 OR $21) AND $6 IS NULL THEN NULL
+         WHEN ($20 OR $21) THEN (SELECT id FROM selected_z)
+         ELSE pc.z_interface_id
+       END,
+       circuit_id = CASE
+         WHEN $22 AND $7 IS NULL THEN NULL
+         WHEN $22 THEN (SELECT id FROM selected_circuit)
+         ELSE pc.circuit_id
+       END,
+       a_endpoint = CASE WHEN $23 THEN $8 ELSE pc.a_endpoint END,
+       z_endpoint = CASE WHEN $24 THEN $9 ELSE pc.z_endpoint END,
+       media_type = CASE WHEN $25 THEN $10 ELSE pc.media_type END,
+       connector_a = CASE WHEN $26 THEN $11 ELSE pc.connector_a END,
+       connector_z = CASE WHEN $27 THEN $12 ELSE pc.connector_z END,
+       length_meters = CASE WHEN $28 THEN $13 ELSE pc.length_meters END,
+       fiber_mode = CASE WHEN $29 THEN $14 ELSE pc.fiber_mode END,
+       color = CASE WHEN $30 THEN $15 ELSE pc.color END,
+       status = CASE WHEN $31 THEN $16 ELSE pc.status END
+     WHERE pc.id = $1::uuid
+       AND (NOT ($18 OR $19) OR $3 IS NULL OR $4 IS NULL OR EXISTS (SELECT 1 FROM selected_a))
+       AND (NOT ($20 OR $21) OR $5 IS NULL OR $6 IS NULL OR EXISTS (SELECT 1 FROM selected_z))
+       AND (NOT $22 OR $7 IS NULL OR EXISTS (SELECT 1 FROM selected_circuit))
+     RETURNING
+       pc.id,
+       pc.code,
+       pc.a_endpoint,
+       pc.z_endpoint,
+       (SELECT d.name FROM interfaces i JOIN devices d ON d.id = i.device_id WHERE i.id = pc.a_interface_id) AS a_device,
+       (SELECT d.name FROM interfaces i JOIN devices d ON d.id = i.device_id WHERE i.id = pc.z_interface_id) AS z_device,
+       pc.media_type,
+       pc.connector_a,
+       pc.connector_z,
+       pc.length_meters,
+       pc.fiber_mode,
+       pc.color,
+       pc.status,
+       (SELECT c.code FROM circuits c WHERE c.id = pc.circuit_id) AS circuit_code`,
+    [
+      input.id,
+      input.code ?? null,
+      input.aDeviceName ?? null,
+      input.aInterfaceName ?? null,
+      input.zDeviceName ?? null,
+      input.zInterfaceName ?? null,
+      input.circuitCode ?? null,
+      input.aEndpoint ?? null,
+      input.zEndpoint ?? null,
+      input.mediaType ?? null,
+      input.connectorA ?? null,
+      input.connectorZ ?? null,
+      input.lengthMeters ?? null,
+      input.fiberMode ?? null,
+      input.color ?? null,
+      input.status ?? null,
+      hasCode,
+      hasADeviceName,
+      hasAInterfaceName,
+      hasZDeviceName,
+      hasZInterfaceName,
+      hasCircuitCode,
+      hasAEndpoint,
+      hasZEndpoint,
+      hasMediaType,
+      hasConnectorA,
+      hasConnectorZ,
+      hasLengthMeters,
+      hasFiberMode,
+      hasColor,
+      hasStatus
     ]
   );
 
