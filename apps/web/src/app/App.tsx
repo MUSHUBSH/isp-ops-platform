@@ -1925,6 +1925,20 @@ function DatacenterView({
     distanceKm: "",
     status: "planned"
   });
+  const [selectedFiberSpanId, setSelectedFiberSpanId] = useState(fiberSpans[0]?.id ?? "");
+  const selectedFiberSpan = fiberSpans.find((span) => span.id === selectedFiberSpanId);
+  const [spanEditForm, setSpanEditForm] = useState({
+    code: fiberSpans[0]?.code ?? "",
+    aSite: fiberSpans[0]?.aSite ?? "",
+    zSite: fiberSpans[0]?.zSite ?? "",
+    providerCode: fiberSpans[0]?.providerCode ?? "",
+    cableType: fiberSpans[0]?.cableType ?? "",
+    fiberCount: fiberSpans[0]?.fiberCount ? String(fiberSpans[0].fiberCount) : "",
+    usedFibers: fiberSpans[0]?.usedFibers ? String(fiberSpans[0].usedFibers) : "0",
+    distanceKm: fiberSpans[0]?.distanceKm ? String(fiberSpans[0].distanceKm) : "",
+    status: fiberSpans[0]?.status ?? "planned",
+    notes: fiberSpans[0]?.notes ?? ""
+  });
   const [strandForm, setStrandForm] = useState({
     spanCode: fiberSpans[0]?.code ?? "",
     strandNumber: "1",
@@ -2022,6 +2036,30 @@ function DatacenterView({
     }
   }, [selectedCapacity]);
 
+  useEffect(() => {
+    const currentSpanExists = fiberSpans.some((span) => span.id === selectedFiberSpanId);
+    if (!currentSpanExists) {
+      setSelectedFiberSpanId(fiberSpans[0]?.id ?? "");
+    }
+  }, [fiberSpans, selectedFiberSpanId]);
+
+  useEffect(() => {
+    if (selectedFiberSpan) {
+      setSpanEditForm({
+        code: selectedFiberSpan.code,
+        aSite: selectedFiberSpan.aSite,
+        zSite: selectedFiberSpan.zSite,
+        providerCode: selectedFiberSpan.providerCode ?? "",
+        cableType: selectedFiberSpan.cableType,
+        fiberCount: String(selectedFiberSpan.fiberCount),
+        usedFibers: String(selectedFiberSpan.usedFibers),
+        distanceKm: selectedFiberSpan.distanceKm ? String(selectedFiberSpan.distanceKm) : "",
+        status: selectedFiberSpan.status,
+        notes: selectedFiberSpan.notes ?? ""
+      });
+    }
+  }, [selectedFiberSpan]);
+
   async function savePhysical(event: FormEvent<HTMLFormElement>, path: string, payload: Record<string, unknown>, reset: () => void) {
     event.preventDefault();
     setFormState("saving");
@@ -2070,6 +2108,32 @@ function DatacenterView({
         billingMode: capacityEditForm.billingMode,
         status: capacityEditForm.status,
         reason: "Edicion de capacidad contratada desde Datacenter"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateFiberSpan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedFiberSpan) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/physical/fiber-spans/${selectedFiberSpan.id}`, {
+        code: spanEditForm.code,
+        aSite: spanEditForm.aSite,
+        zSite: spanEditForm.zSite,
+        providerCode: spanEditForm.providerCode || null,
+        cableType: spanEditForm.cableType,
+        fiberCount: Number(spanEditForm.fiberCount),
+        usedFibers: num(spanEditForm.usedFibers),
+        distanceKm: num(spanEditForm.distanceKm),
+        status: spanEditForm.status,
+        notes: spanEditForm.notes || null,
+        reason: "Edicion de tramo de fibra desde Datacenter"
       });
       await onReload();
       setFormState("saved");
@@ -2173,6 +2237,31 @@ function DatacenterView({
             <label>Km<input inputMode="decimal" onChange={(event) => setSpanForm((current) => ({ ...current, distanceKm: event.target.value }))} value={spanForm.distanceKm} /></label>
             <button disabled={!spanForm.code} type="submit">Guardar tramo</button>
           </form>
+          {selectedFiberSpan && (
+            <form className="quickForm" onSubmit={updateFiberSpan}>
+              <p className="eyebrow">Editar tramo</p>
+              <label className="wideField">Tramo<select onChange={(event) => setSelectedFiberSpanId(event.target.value)} value={selectedFiberSpanId}>
+                {fiberSpans.map((span) => <option key={span.id} value={span.id}>{span.code} - {span.aSite}/{span.zSite}</option>)}
+              </select></label>
+              <label>Codigo<input onChange={(event) => setSpanEditForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={spanEditForm.code} /></label>
+              <label>Sede A<input onChange={(event) => setSpanEditForm((current) => ({ ...current, aSite: event.target.value.toUpperCase() }))} value={spanEditForm.aSite} /></label>
+              <label>Sede Z<input onChange={(event) => setSpanEditForm((current) => ({ ...current, zSite: event.target.value.toUpperCase() }))} value={spanEditForm.zSite} /></label>
+              <label>Proveedor<input onChange={(event) => setSpanEditForm((current) => ({ ...current, providerCode: event.target.value.toUpperCase() }))} value={spanEditForm.providerCode} /></label>
+              <label className="wideField">Cable<input onChange={(event) => setSpanEditForm((current) => ({ ...current, cableType: event.target.value }))} value={spanEditForm.cableType} /></label>
+              <label>Hilos<input inputMode="numeric" onChange={(event) => setSpanEditForm((current) => ({ ...current, fiberCount: event.target.value }))} value={spanEditForm.fiberCount} /></label>
+              <label>Usados<input inputMode="numeric" onChange={(event) => setSpanEditForm((current) => ({ ...current, usedFibers: event.target.value }))} value={spanEditForm.usedFibers} /></label>
+              <label>Km<input inputMode="decimal" onChange={(event) => setSpanEditForm((current) => ({ ...current, distanceKm: event.target.value }))} value={spanEditForm.distanceKm} /></label>
+              <label>Estado<select onChange={(event) => setSpanEditForm((current) => ({ ...current, status: event.target.value }))} value={spanEditForm.status}>
+                <option value="active">active</option>
+                <option value="planned">planned</option>
+                <option value="degraded">degraded</option>
+                <option value="down">down</option>
+                <option value="retired">retired</option>
+              </select></label>
+              <label className="wideField">Notas<input onChange={(event) => setSpanEditForm((current) => ({ ...current, notes: event.target.value }))} value={spanEditForm.notes} /></label>
+              <button disabled={!spanEditForm.code || !spanEditForm.aSite || !spanEditForm.zSite || !spanEditForm.fiberCount} type="submit">Guardar tramo</button>
+            </form>
+          )}
         </div>
 
         <div className="panel">

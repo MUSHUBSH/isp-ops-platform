@@ -135,6 +135,10 @@ export type CreateFiberSpanInput = {
   notes?: string | null;
 };
 
+export type UpdateFiberSpanInput = Partial<CreateFiberSpanInput> & {
+  id: string;
+};
+
 export type CreateFiberStrandInput = {
   spanCode: string;
   circuitCode?: string | null;
@@ -592,6 +596,93 @@ export async function createFiberSpanInDb(input: CreateFiberSpanInput) {
       input.usedFibers ?? 0,
       input.distanceKm ?? null,
       input.status ?? "planned",
+      input.notes ?? null
+    ]
+  );
+
+  const row = rows?.[0];
+  return row
+    ? {
+        id: row.id,
+        code: row.code,
+        aSite: row.a_site,
+        zSite: row.z_site,
+        providerCode: row.provider_code,
+        cableType: row.cable_type,
+        fiberCount: row.fiber_count,
+        usedFibers: row.used_fibers,
+        distanceKm: numberOrNull(row.distance_km),
+        status: row.status,
+        notes: row.notes
+      }
+    : null;
+}
+
+export async function updateFiberSpanInDb(input: UpdateFiberSpanInput) {
+  const hasCode = Object.hasOwn(input, "code");
+  const hasASite = Object.hasOwn(input, "aSite");
+  const hasZSite = Object.hasOwn(input, "zSite");
+  const hasProviderCode = Object.hasOwn(input, "providerCode");
+  const hasCableType = Object.hasOwn(input, "cableType");
+  const hasFiberCount = Object.hasOwn(input, "fiberCount");
+  const hasUsedFibers = Object.hasOwn(input, "usedFibers");
+  const hasDistanceKm = Object.hasOwn(input, "distanceKm");
+  const hasStatus = Object.hasOwn(input, "status");
+  const hasNotes = Object.hasOwn(input, "notes");
+  const rows = await query<FiberSpanRow>(
+    `UPDATE fiber_spans fs
+     SET
+       code = CASE WHEN $11 THEN $2 ELSE fs.code END,
+       a_site_id = CASE WHEN $12 THEN (SELECT id FROM sites WHERE code = $3) ELSE fs.a_site_id END,
+       z_site_id = CASE WHEN $13 THEN (SELECT id FROM sites WHERE code = $4) ELSE fs.z_site_id END,
+       provider_id = CASE
+         WHEN $14 AND $5 IS NULL THEN NULL
+         WHEN $14 THEN (SELECT id FROM providers WHERE code = $5)
+         ELSE fs.provider_id
+       END,
+       cable_type = CASE WHEN $15 THEN $6 ELSE fs.cable_type END,
+       fiber_count = CASE WHEN $16 THEN $7 ELSE fs.fiber_count END,
+       used_fibers = CASE WHEN $17 THEN $8 ELSE fs.used_fibers END,
+       distance_km = CASE WHEN $18 THEN $9 ELSE fs.distance_km END,
+       status = CASE WHEN $19 THEN $10 ELSE fs.status END,
+       notes = CASE WHEN $20 THEN $21 ELSE fs.notes END
+     WHERE fs.id = $1::uuid
+       AND (NOT $12 OR EXISTS (SELECT 1 FROM sites WHERE code = $3))
+       AND (NOT $13 OR EXISTS (SELECT 1 FROM sites WHERE code = $4))
+       AND (NOT $14 OR $5 IS NULL OR EXISTS (SELECT 1 FROM providers WHERE code = $5))
+     RETURNING
+       fs.id,
+       fs.code,
+       (SELECT s.code FROM sites s WHERE s.id = fs.a_site_id) AS a_site,
+       (SELECT s.code FROM sites s WHERE s.id = fs.z_site_id) AS z_site,
+       (SELECT p.code FROM providers p WHERE p.id = fs.provider_id) AS provider_code,
+       fs.cable_type,
+       fs.fiber_count,
+       fs.used_fibers,
+       fs.distance_km,
+       fs.status,
+       fs.notes`,
+    [
+      input.id,
+      input.code ?? null,
+      input.aSite ?? null,
+      input.zSite ?? null,
+      input.providerCode ?? null,
+      input.cableType ?? null,
+      input.fiberCount ?? null,
+      input.usedFibers ?? null,
+      input.distanceKm ?? null,
+      input.status ?? null,
+      hasCode,
+      hasASite,
+      hasZSite,
+      hasProviderCode,
+      hasCableType,
+      hasFiberCount,
+      hasUsedFibers,
+      hasDistanceKm,
+      hasStatus,
+      hasNotes,
       input.notes ?? null
     ]
   );

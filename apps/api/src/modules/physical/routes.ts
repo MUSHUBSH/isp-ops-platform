@@ -25,6 +25,7 @@ import {
   listProviderCapacitiesFromDb,
   listTransceiversFromDb,
   resolvePhysicalKind,
+  updateFiberSpanInDb,
   updateProviderCapacityInDb,
   updatePhysicalStatusInDb
 } from "./repository.js";
@@ -60,6 +61,10 @@ const fiberSpanSchema = z.object({
   distanceKm: nullableNumber,
   status: z.string().trim().min(2).max(40).optional(),
   notes: nullableString,
+  reason: nullableString
+});
+
+const updateFiberSpanSchema = fiberSpanSchema.partial().omit({ reason: true }).extend({
   reason: nullableString
 });
 
@@ -209,6 +214,18 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     if (!span) return reply.code(503).send({ message: "PostgreSQL is required to create fiber spans" });
     await auditCreated(request, "physical.fiber_span.created", "fiber_span", span, span, parsed.data.reason);
     return reply.code(201).send({ span });
+  });
+
+  app.patch("/physical/fiber-spans/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateFiberSpanSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const span = await updateFiberSpanInDb({ id, ...parsed.data });
+    if (!span) return reply.code(409).send({ message: "Fiber span not found, references invalid, or PostgreSQL is required" });
+
+    await auditMutation(request, "physical.fiber_span.updated", "fiber_span", span.id, span, parsed.data.reason);
+    return { span };
   });
 
   app.post("/physical/fiber-strands", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
