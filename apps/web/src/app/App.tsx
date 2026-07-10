@@ -1979,6 +1979,24 @@ function DatacenterView({
     rxPowerDbm: "",
     status: "active"
   });
+  const [selectedTransceiverId, setSelectedTransceiverId] = useState(transceivers[0]?.id ?? "");
+  const selectedTransceiver = transceivers.find((transceiver) => transceiver.id === selectedTransceiverId);
+  const [opticEditForm, setOpticEditForm] = useState({
+    deviceName: transceivers[0]?.device ?? "",
+    interfaceName: transceivers[0]?.interface ?? "",
+    vendor: transceivers[0]?.vendor ?? "",
+    partNumber: transceivers[0]?.partNumber ?? "",
+    serialNumber: transceivers[0]?.serialNumber ?? "",
+    formFactor: transceivers[0]?.formFactor ?? "SFP+",
+    speedMbps: transceivers[0]?.speedMbps ? String(transceivers[0].speedMbps) : "10000",
+    wavelengthNm: transceivers[0]?.wavelengthNm ? String(transceivers[0].wavelengthNm) : "",
+    reachKm: transceivers[0]?.reachKm ? String(transceivers[0].reachKm) : "",
+    connectorType: transceivers[0]?.connectorType ?? "LC",
+    fiberMode: transceivers[0]?.fiberMode ?? "SM",
+    txPowerDbm: transceivers[0]?.txPowerDbm ? String(transceivers[0].txPowerDbm) : "",
+    rxPowerDbm: transceivers[0]?.rxPowerDbm ? String(transceivers[0].rxPowerDbm) : "",
+    status: transceivers[0]?.status ?? "active"
+  });
   const [patchForm, setPatchForm] = useState({
     code: "",
     aDeviceName: "",
@@ -2096,6 +2114,34 @@ function DatacenterView({
     }
   }, [selectedFiberStrand]);
 
+  useEffect(() => {
+    const currentTransceiverExists = transceivers.some((transceiver) => transceiver.id === selectedTransceiverId);
+    if (!currentTransceiverExists) {
+      setSelectedTransceiverId(transceivers[0]?.id ?? "");
+    }
+  }, [selectedTransceiverId, transceivers]);
+
+  useEffect(() => {
+    if (selectedTransceiver) {
+      setOpticEditForm({
+        deviceName: selectedTransceiver.device,
+        interfaceName: selectedTransceiver.interface,
+        vendor: selectedTransceiver.vendor,
+        partNumber: selectedTransceiver.partNumber,
+        serialNumber: selectedTransceiver.serialNumber ?? "",
+        formFactor: selectedTransceiver.formFactor,
+        speedMbps: String(selectedTransceiver.speedMbps),
+        wavelengthNm: selectedTransceiver.wavelengthNm ? String(selectedTransceiver.wavelengthNm) : "",
+        reachKm: selectedTransceiver.reachKm ? String(selectedTransceiver.reachKm) : "",
+        connectorType: selectedTransceiver.connectorType,
+        fiberMode: selectedTransceiver.fiberMode,
+        txPowerDbm: selectedTransceiver.txPowerDbm ? String(selectedTransceiver.txPowerDbm) : "",
+        rxPowerDbm: selectedTransceiver.rxPowerDbm ? String(selectedTransceiver.rxPowerDbm) : "",
+        status: selectedTransceiver.status
+      });
+    }
+  }, [selectedTransceiver]);
+
   async function savePhysical(event: FormEvent<HTMLFormElement>, path: string, payload: Record<string, unknown>, reset: () => void) {
     event.preventDefault();
     setFormState("saving");
@@ -2195,6 +2241,36 @@ function DatacenterView({
         aTermination: strandEditForm.aTermination || null,
         zTermination: strandEditForm.zTermination || null,
         reason: "Edicion de hilo de fibra desde Datacenter"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateTransceiver(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedTransceiver) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/physical/transceivers/${selectedTransceiver.id}`, {
+        deviceName: opticEditForm.deviceName,
+        interfaceName: opticEditForm.interfaceName,
+        vendor: opticEditForm.vendor,
+        partNumber: opticEditForm.partNumber,
+        serialNumber: opticEditForm.serialNumber || null,
+        formFactor: opticEditForm.formFactor,
+        speedMbps: Number(opticEditForm.speedMbps),
+        wavelengthNm: num(opticEditForm.wavelengthNm),
+        reachKm: num(opticEditForm.reachKm),
+        connectorType: opticEditForm.connectorType,
+        fiberMode: opticEditForm.fiberMode,
+        txPowerDbm: num(opticEditForm.txPowerDbm),
+        rxPowerDbm: num(opticEditForm.rxPowerDbm),
+        status: opticEditForm.status,
+        reason: "Edicion de transceiver desde Datacenter"
       });
       await onReload();
       setFormState("saved");
@@ -2405,6 +2481,34 @@ function DatacenterView({
             <label>Estado<select onChange={(event) => setOpticForm((current) => ({ ...current, status: event.target.value }))} value={opticForm.status}><option value="active">active</option><option value="degraded">degraded</option><option value="faulty">faulty</option></select></label>
             <button disabled={!opticForm.deviceName || !opticForm.interfaceName || !opticForm.vendor || !opticForm.partNumber} type="submit">Guardar optica</button>
           </form>
+          {selectedTransceiver && (
+            <form className="quickForm" onSubmit={updateTransceiver}>
+              <p className="eyebrow">Editar optica</p>
+              <label className="wideField">Optica<select onChange={(event) => setSelectedTransceiverId(event.target.value)} value={selectedTransceiverId}>
+                {transceivers.map((optic) => <option key={optic.id} value={optic.id}>{optic.device} - {optic.interface}</option>)}
+              </select></label>
+              <label>Equipo<input onChange={(event) => setOpticEditForm((current) => ({ ...current, deviceName: event.target.value }))} value={opticEditForm.deviceName} /></label>
+              <label>Puerto<input onChange={(event) => setOpticEditForm((current) => ({ ...current, interfaceName: event.target.value }))} value={opticEditForm.interfaceName} /></label>
+              <label>Vendor<input onChange={(event) => setOpticEditForm((current) => ({ ...current, vendor: event.target.value }))} value={opticEditForm.vendor} /></label>
+              <label>Parte<input onChange={(event) => setOpticEditForm((current) => ({ ...current, partNumber: event.target.value }))} value={opticEditForm.partNumber} /></label>
+              <label>Serial<input onChange={(event) => setOpticEditForm((current) => ({ ...current, serialNumber: event.target.value }))} value={opticEditForm.serialNumber} /></label>
+              <label>Factor<input onChange={(event) => setOpticEditForm((current) => ({ ...current, formFactor: event.target.value }))} value={opticEditForm.formFactor} /></label>
+              <label>Mbps<input inputMode="numeric" onChange={(event) => setOpticEditForm((current) => ({ ...current, speedMbps: event.target.value }))} value={opticEditForm.speedMbps} /></label>
+              <label>nm<input inputMode="numeric" onChange={(event) => setOpticEditForm((current) => ({ ...current, wavelengthNm: event.target.value }))} value={opticEditForm.wavelengthNm} /></label>
+              <label>Km<input inputMode="decimal" onChange={(event) => setOpticEditForm((current) => ({ ...current, reachKm: event.target.value }))} value={opticEditForm.reachKm} /></label>
+              <label>Conector<input onChange={(event) => setOpticEditForm((current) => ({ ...current, connectorType: event.target.value }))} value={opticEditForm.connectorType} /></label>
+              <label>Modo<input onChange={(event) => setOpticEditForm((current) => ({ ...current, fiberMode: event.target.value }))} value={opticEditForm.fiberMode} /></label>
+              <label>Tx dBm<input inputMode="decimal" onChange={(event) => setOpticEditForm((current) => ({ ...current, txPowerDbm: event.target.value }))} value={opticEditForm.txPowerDbm} /></label>
+              <label>Rx dBm<input inputMode="decimal" onChange={(event) => setOpticEditForm((current) => ({ ...current, rxPowerDbm: event.target.value }))} value={opticEditForm.rxPowerDbm} /></label>
+              <label>Estado<select onChange={(event) => setOpticEditForm((current) => ({ ...current, status: event.target.value }))} value={opticEditForm.status}>
+                <option value="active">active</option>
+                <option value="degraded">degraded</option>
+                <option value="faulty">faulty</option>
+                <option value="retired">retired</option>
+              </select></label>
+              <button disabled={!opticEditForm.deviceName || !opticEditForm.interfaceName || !opticEditForm.vendor || !opticEditForm.partNumber || !opticEditForm.speedMbps} type="submit">Guardar optica</button>
+            </form>
+          )}
         </div>
 
         <div className="panel">

@@ -172,6 +172,10 @@ export type CreateTransceiverInput = {
   status?: string;
 };
 
+export type UpdateTransceiverInput = Partial<CreateTransceiverInput> & {
+  id: string;
+};
+
 export type CreatePatchcordInput = {
   code: string;
   aDeviceName?: string | null;
@@ -879,6 +883,133 @@ export async function createTransceiverInDb(input: CreateTransceiverInput) {
       input.txPowerDbm ?? null,
       input.rxPowerDbm ?? null,
       input.status ?? "active"
+    ]
+  );
+
+  const row = rows?.[0];
+  return row
+    ? {
+        id: row.id,
+        device: row.device,
+        interface: row.interface,
+        siteCode: row.site_code,
+        vendor: row.vendor,
+        partNumber: row.part_number,
+        serialNumber: row.serial_number,
+        formFactor: row.form_factor,
+        speedMbps: row.speed_mbps,
+        wavelengthNm: row.wavelength_nm,
+        reachKm: numberOrNull(row.reach_km),
+        connectorType: row.connector_type,
+        fiberMode: row.fiber_mode,
+        txPowerDbm: numberOrNull(row.tx_power_dbm),
+        rxPowerDbm: numberOrNull(row.rx_power_dbm),
+        status: row.status
+      }
+    : null;
+}
+
+export async function updateTransceiverInDb(input: UpdateTransceiverInput) {
+  const hasDeviceName = Object.hasOwn(input, "deviceName");
+  const hasInterfaceName = Object.hasOwn(input, "interfaceName");
+  const hasVendor = Object.hasOwn(input, "vendor");
+  const hasPartNumber = Object.hasOwn(input, "partNumber");
+  const hasSerialNumber = Object.hasOwn(input, "serialNumber");
+  const hasFormFactor = Object.hasOwn(input, "formFactor");
+  const hasSpeedMbps = Object.hasOwn(input, "speedMbps");
+  const hasWavelengthNm = Object.hasOwn(input, "wavelengthNm");
+  const hasReachKm = Object.hasOwn(input, "reachKm");
+  const hasConnectorType = Object.hasOwn(input, "connectorType");
+  const hasFiberMode = Object.hasOwn(input, "fiberMode");
+  const hasTxPowerDbm = Object.hasOwn(input, "txPowerDbm");
+  const hasRxPowerDbm = Object.hasOwn(input, "rxPowerDbm");
+  const hasStatus = Object.hasOwn(input, "status");
+  const rows = await query<TransceiverRow>(
+    `WITH current_transceiver AS (
+       SELECT
+         t.*,
+         d.name AS current_device,
+         i.name AS current_interface,
+         CASE
+           WHEN $16 OR $17 THEN (
+             SELECT ni.id
+             FROM devices nd
+             JOIN interfaces ni ON ni.device_id = nd.id
+             WHERE nd.name = COALESCE($2, d.name)
+               AND ni.name = COALESCE($3, i.name)
+           )
+           ELSE t.interface_id
+         END AS target_interface_id
+       FROM transceivers t
+       JOIN interfaces i ON i.id = t.interface_id
+       JOIN devices d ON d.id = i.device_id
+       WHERE t.id = $1::uuid
+     )
+     UPDATE transceivers t
+     SET
+       interface_id = current_transceiver.target_interface_id,
+       vendor = CASE WHEN $18 THEN $4 ELSE t.vendor END,
+       part_number = CASE WHEN $19 THEN $5 ELSE t.part_number END,
+       serial_number = CASE WHEN $20 THEN $6 ELSE t.serial_number END,
+       form_factor = CASE WHEN $21 THEN $7 ELSE t.form_factor END,
+       speed_mbps = CASE WHEN $22 THEN $8 ELSE t.speed_mbps END,
+       wavelength_nm = CASE WHEN $23 THEN $9 ELSE t.wavelength_nm END,
+       reach_km = CASE WHEN $24 THEN $10 ELSE t.reach_km END,
+       connector_type = CASE WHEN $25 THEN $11 ELSE t.connector_type END,
+       fiber_mode = CASE WHEN $26 THEN $12 ELSE t.fiber_mode END,
+       tx_power_dbm = CASE WHEN $27 THEN $13 ELSE t.tx_power_dbm END,
+       rx_power_dbm = CASE WHEN $28 THEN $14 ELSE t.rx_power_dbm END,
+       status = CASE WHEN $29 THEN $15 ELSE t.status END
+     FROM current_transceiver
+     WHERE t.id = current_transceiver.id
+       AND current_transceiver.target_interface_id IS NOT NULL
+     RETURNING
+       t.id,
+       (SELECT d.name FROM interfaces i JOIN devices d ON d.id = i.device_id WHERE i.id = t.interface_id) AS device,
+       (SELECT i.name FROM interfaces i WHERE i.id = t.interface_id) AS interface,
+       (SELECT s.code FROM interfaces i JOIN devices d ON d.id = i.device_id JOIN sites s ON s.id = d.site_id WHERE i.id = t.interface_id) AS site_code,
+       t.vendor,
+       t.part_number,
+       t.serial_number,
+       t.form_factor,
+       t.speed_mbps,
+       t.wavelength_nm,
+       t.reach_km,
+       t.connector_type,
+       t.fiber_mode,
+       t.tx_power_dbm,
+       t.rx_power_dbm,
+       t.status`,
+    [
+      input.id,
+      input.deviceName ?? null,
+      input.interfaceName ?? null,
+      input.vendor ?? null,
+      input.partNumber ?? null,
+      input.serialNumber ?? null,
+      input.formFactor ?? null,
+      input.speedMbps ?? null,
+      input.wavelengthNm ?? null,
+      input.reachKm ?? null,
+      input.connectorType ?? null,
+      input.fiberMode ?? null,
+      input.txPowerDbm ?? null,
+      input.rxPowerDbm ?? null,
+      input.status ?? null,
+      hasDeviceName,
+      hasInterfaceName,
+      hasVendor,
+      hasPartNumber,
+      hasSerialNumber,
+      hasFormFactor,
+      hasSpeedMbps,
+      hasWavelengthNm,
+      hasReachKm,
+      hasConnectorType,
+      hasFiberMode,
+      hasTxPowerDbm,
+      hasRxPowerDbm,
+      hasStatus
     ]
   );
 

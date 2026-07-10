@@ -28,7 +28,8 @@ import {
   updateFiberSpanInDb,
   updateFiberStrandInDb,
   updateProviderCapacityInDb,
-  updatePhysicalStatusInDb
+  updatePhysicalStatusInDb,
+  updateTransceiverInDb
 } from "./repository.js";
 
 const nullableString = z.string().trim().min(1).nullable().optional();
@@ -101,6 +102,10 @@ const transceiverSchema = z.object({
   txPowerDbm: nullableNumber,
   rxPowerDbm: nullableNumber,
   status: z.string().trim().min(2).max(40).optional(),
+  reason: nullableString
+});
+
+const updateTransceiverSchema = transceiverSchema.partial().omit({ reason: true }).extend({
   reason: nullableString
 });
 
@@ -261,6 +266,18 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     if (!transceiver) return reply.code(503).send({ message: "PostgreSQL is required to create transceivers" });
     await auditCreated(request, "physical.transceiver.created", "transceiver", transceiver, transceiver, parsed.data.reason);
     return reply.code(201).send({ transceiver });
+  });
+
+  app.patch("/physical/transceivers/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateTransceiverSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const transceiver = await updateTransceiverInDb({ id, ...parsed.data });
+    if (!transceiver) return reply.code(409).send({ message: "Transceiver not found, interface invalid, or PostgreSQL is required" });
+
+    await auditMutation(request, "physical.transceiver.updated", "transceiver", transceiver.id, transceiver, parsed.data.reason);
+    return { transceiver };
   });
 
   app.post("/physical/patchcords", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
