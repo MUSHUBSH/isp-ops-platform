@@ -25,6 +25,7 @@ import {
   listProviderCapacitiesFromDb,
   listTransceiversFromDb,
   resolvePhysicalKind,
+  updateProviderCapacityInDb,
   updatePhysicalStatusInDb
 } from "./repository.js";
 
@@ -41,6 +42,10 @@ const providerCapacitySchema = z.object({
   usedMbps: nullableNumber,
   billingMode: z.string().trim().min(2).max(80),
   status: z.string().trim().min(2).max(40).optional(),
+  reason: nullableString
+});
+
+const updateProviderCapacitySchema = providerCapacitySchema.partial().omit({ reason: true }).extend({
   reason: nullableString
 });
 
@@ -183,6 +188,18 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     if (!capacity) return reply.code(503).send({ message: "PostgreSQL is required to create provider capacities" });
     await auditCreated(request, "physical.provider_capacity.created", "provider_capacity", capacity, capacity, parsed.data.reason);
     return reply.code(201).send({ capacity });
+  });
+
+  app.patch("/physical/provider-capacities/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateProviderCapacitySchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const capacity = await updateProviderCapacityInDb({ id, ...parsed.data });
+    if (!capacity) return reply.code(409).send({ message: "Capacity not found, provider/contract invalid, or PostgreSQL is required" });
+
+    await auditMutation(request, "physical.provider_capacity.updated", "provider_capacity", capacity.id, capacity, parsed.data.reason);
+    return { capacity };
   });
 
   app.post("/physical/fiber-spans", { preHandler: requirePermission("physical.write") }, async (request, reply) => {

@@ -1901,6 +1901,19 @@ function DatacenterView({
     usedMbps: "0",
     billingMode: "commit"
   });
+  const [selectedCapacityId, setSelectedCapacityId] = useState(capacities[0]?.id ?? "");
+  const selectedCapacity = capacities.find((capacity) => capacity.id === selectedCapacityId);
+  const [capacityEditForm, setCapacityEditForm] = useState({
+    providerCode: capacities[0]?.providerCode ?? "",
+    contractCode: capacities[0]?.contractCode ?? "",
+    serviceType: capacities[0]?.serviceType ?? "",
+    committedMbps: capacities[0]?.committedMbps ? String(capacities[0].committedMbps) : "",
+    burstableMbps: capacities[0]?.burstableMbps ? String(capacities[0].burstableMbps) : "",
+    deliveredMbps: capacities[0]?.deliveredMbps ? String(capacities[0].deliveredMbps) : "",
+    usedMbps: capacities[0]?.usedMbps ? String(capacities[0].usedMbps) : "0",
+    billingMode: capacities[0]?.billingMode ?? "commit",
+    status: capacities[0]?.status ?? "active"
+  });
   const [spanForm, setSpanForm] = useState({
     code: "",
     aSite: "AQP-POP",
@@ -1986,6 +1999,29 @@ function DatacenterView({
   const degradedOptics = transceivers.filter((item) => item.status !== "active").length;
   const utilization = totalContracted > 0 ? Math.round((totalUsed / totalContracted) * 100) : 0;
 
+  useEffect(() => {
+    const currentCapacityExists = capacities.some((capacity) => capacity.id === selectedCapacityId);
+    if (!currentCapacityExists) {
+      setSelectedCapacityId(capacities[0]?.id ?? "");
+    }
+  }, [capacities, selectedCapacityId]);
+
+  useEffect(() => {
+    if (selectedCapacity) {
+      setCapacityEditForm({
+        providerCode: selectedCapacity.providerCode,
+        contractCode: selectedCapacity.contractCode ?? "",
+        serviceType: selectedCapacity.serviceType,
+        committedMbps: String(selectedCapacity.committedMbps),
+        burstableMbps: selectedCapacity.burstableMbps ? String(selectedCapacity.burstableMbps) : "",
+        deliveredMbps: String(selectedCapacity.deliveredMbps),
+        usedMbps: String(selectedCapacity.usedMbps),
+        billingMode: selectedCapacity.billingMode,
+        status: selectedCapacity.status
+      });
+    }
+  }, [selectedCapacity]);
+
   async function savePhysical(event: FormEvent<HTMLFormElement>, path: string, payload: Record<string, unknown>, reset: () => void) {
     event.preventDefault();
     setFormState("saving");
@@ -2009,6 +2045,31 @@ function DatacenterView({
       await apiPatch(`/physical/${selectedRecord.kind}/${selectedRecord.id}/status`, {
         status: operationForm.status,
         reason: "Cambio de estado desde Datacenter"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateProviderCapacity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCapacity) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/physical/provider-capacities/${selectedCapacity.id}`, {
+        providerCode: capacityEditForm.providerCode,
+        contractCode: capacityEditForm.contractCode || null,
+        serviceType: capacityEditForm.serviceType,
+        committedMbps: Number(capacityEditForm.committedMbps),
+        burstableMbps: num(capacityEditForm.burstableMbps),
+        deliveredMbps: Number(capacityEditForm.deliveredMbps),
+        usedMbps: num(capacityEditForm.usedMbps),
+        billingMode: capacityEditForm.billingMode,
+        status: capacityEditForm.status,
+        reason: "Edicion de capacidad contratada desde Datacenter"
       });
       await onReload();
       setFormState("saved");
@@ -2063,6 +2124,30 @@ function DatacenterView({
             <label>Billing<input onChange={(event) => setCapacityForm((current) => ({ ...current, billingMode: event.target.value }))} value={capacityForm.billingMode} /></label>
             <button type="submit">Guardar capacidad</button>
           </form>
+          {selectedCapacity && (
+            <form className="quickForm" onSubmit={updateProviderCapacity}>
+              <p className="eyebrow">Editar capacidad</p>
+              <label className="wideField">Registro<select onChange={(event) => setSelectedCapacityId(event.target.value)} value={selectedCapacityId}>
+                {capacities.map((capacity) => <option key={capacity.id} value={capacity.id}>{capacity.providerCode} - {capacity.serviceType}</option>)}
+              </select></label>
+              <label>Proveedor<input onChange={(event) => setCapacityEditForm((current) => ({ ...current, providerCode: event.target.value.toUpperCase() }))} value={capacityEditForm.providerCode} /></label>
+              <label>Contrato<input onChange={(event) => setCapacityEditForm((current) => ({ ...current, contractCode: event.target.value.toUpperCase() }))} value={capacityEditForm.contractCode} /></label>
+              <label className="wideField">Servicio<input onChange={(event) => setCapacityEditForm((current) => ({ ...current, serviceType: event.target.value }))} value={capacityEditForm.serviceType} /></label>
+              <label>Commit Mbps<input inputMode="numeric" onChange={(event) => setCapacityEditForm((current) => ({ ...current, committedMbps: event.target.value }))} value={capacityEditForm.committedMbps} /></label>
+              <label>Burst Mbps<input inputMode="numeric" onChange={(event) => setCapacityEditForm((current) => ({ ...current, burstableMbps: event.target.value }))} value={capacityEditForm.burstableMbps} /></label>
+              <label>Entregado Mbps<input inputMode="numeric" onChange={(event) => setCapacityEditForm((current) => ({ ...current, deliveredMbps: event.target.value }))} value={capacityEditForm.deliveredMbps} /></label>
+              <label>Uso Mbps<input inputMode="numeric" onChange={(event) => setCapacityEditForm((current) => ({ ...current, usedMbps: event.target.value }))} value={capacityEditForm.usedMbps} /></label>
+              <label>Billing<input onChange={(event) => setCapacityEditForm((current) => ({ ...current, billingMode: event.target.value }))} value={capacityEditForm.billingMode} /></label>
+              <label>Estado<select onChange={(event) => setCapacityEditForm((current) => ({ ...current, status: event.target.value }))} value={capacityEditForm.status}>
+                <option value="active">active</option>
+                <option value="planned">planned</option>
+                <option value="degraded">degraded</option>
+                <option value="down">down</option>
+                <option value="retired">retired</option>
+              </select></label>
+              <button disabled={!capacityEditForm.providerCode || !capacityEditForm.serviceType || !capacityEditForm.committedMbps || !capacityEditForm.deliveredMbps} type="submit">Guardar cambios</button>
+            </form>
+          )}
         </div>
 
         <div className="panel">

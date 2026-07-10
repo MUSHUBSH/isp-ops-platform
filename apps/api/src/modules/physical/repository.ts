@@ -118,6 +118,10 @@ export type CreateProviderCapacityInput = {
   status?: string;
 };
 
+export type UpdateProviderCapacityInput = Partial<CreateProviderCapacityInput> & {
+  id: string;
+};
+
 export type CreateFiberSpanInput = {
   code: string;
   aSite: string;
@@ -454,6 +458,100 @@ export async function createProviderCapacityInDb(input: CreateProviderCapacityIn
       input.usedMbps ?? 0,
       input.billingMode,
       input.status ?? "active"
+    ]
+  );
+
+  const row = rows?.[0];
+  return row
+    ? {
+        id: row.id,
+        providerCode: row.provider_code,
+        providerName: row.provider_name,
+        contractCode: row.contract_code,
+        serviceType: row.service_type,
+        committedMbps: row.committed_mbps,
+        burstableMbps: row.burstable_mbps,
+        deliveredMbps: row.delivered_mbps,
+        usedMbps: row.used_mbps,
+        billingMode: row.billing_mode,
+        status: row.status
+      }
+    : null;
+}
+
+export async function updateProviderCapacityInDb(input: UpdateProviderCapacityInput) {
+  const hasProviderCode = Object.hasOwn(input, "providerCode");
+  const hasContractCode = Object.hasOwn(input, "contractCode");
+  const hasServiceType = Object.hasOwn(input, "serviceType");
+  const hasCommittedMbps = Object.hasOwn(input, "committedMbps");
+  const hasBurstableMbps = Object.hasOwn(input, "burstableMbps");
+  const hasDeliveredMbps = Object.hasOwn(input, "deliveredMbps");
+  const hasUsedMbps = Object.hasOwn(input, "usedMbps");
+  const hasBillingMode = Object.hasOwn(input, "billingMode");
+  const hasStatus = Object.hasOwn(input, "status");
+  const rows = await query<ProviderCapacityRow>(
+    `WITH current_capacity AS (
+       SELECT
+         pc.*,
+         CASE WHEN $11 THEN (SELECT p.id FROM providers p WHERE p.code = $2) ELSE pc.provider_id END AS target_provider_id
+       FROM provider_capacities pc
+       WHERE pc.id = $1::uuid
+     )
+     UPDATE provider_capacities pc
+     SET
+       provider_id = CASE WHEN $11 THEN current_capacity.target_provider_id ELSE pc.provider_id END,
+       contract_id = CASE
+         WHEN $12 AND $3 IS NULL THEN NULL
+         WHEN $12 THEN (SELECT c.id FROM contracts c WHERE c.provider_id = current_capacity.target_provider_id AND c.code = $3)
+         ELSE pc.contract_id
+       END,
+       service_type = CASE WHEN $13 THEN $4 ELSE pc.service_type END,
+       committed_mbps = CASE WHEN $14 THEN $5 ELSE pc.committed_mbps END,
+       burstable_mbps = CASE WHEN $15 THEN $6 ELSE pc.burstable_mbps END,
+       delivered_mbps = CASE WHEN $16 THEN $7 ELSE pc.delivered_mbps END,
+       used_mbps = CASE WHEN $17 THEN $8 ELSE pc.used_mbps END,
+       billing_mode = CASE WHEN $18 THEN $9 ELSE pc.billing_mode END,
+       status = CASE WHEN $19 THEN $10 ELSE pc.status END
+     FROM current_capacity
+     WHERE pc.id = current_capacity.id
+       AND current_capacity.target_provider_id IS NOT NULL
+       AND (
+         NOT $12
+         OR $3 IS NULL
+         OR EXISTS (SELECT 1 FROM contracts c WHERE c.provider_id = current_capacity.target_provider_id AND c.code = $3)
+       )
+     RETURNING
+       pc.id,
+       (SELECT p.code FROM providers p WHERE p.id = pc.provider_id) AS provider_code,
+       (SELECT p.name FROM providers p WHERE p.id = pc.provider_id) AS provider_name,
+       (SELECT c.code FROM contracts c WHERE c.id = pc.contract_id) AS contract_code,
+       pc.service_type,
+       pc.committed_mbps,
+       pc.burstable_mbps,
+       pc.delivered_mbps,
+       pc.used_mbps,
+       pc.billing_mode,
+       pc.status`,
+    [
+      input.id,
+      input.providerCode ?? null,
+      input.contractCode ?? null,
+      input.serviceType ?? null,
+      input.committedMbps ?? null,
+      input.burstableMbps ?? null,
+      input.deliveredMbps ?? null,
+      input.usedMbps ?? null,
+      input.billingMode ?? null,
+      input.status ?? null,
+      hasProviderCode,
+      hasContractCode,
+      hasServiceType,
+      hasCommittedMbps,
+      hasBurstableMbps,
+      hasDeliveredMbps,
+      hasUsedMbps,
+      hasBillingMode,
+      hasStatus
     ]
   );
 
