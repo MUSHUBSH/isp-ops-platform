@@ -151,6 +151,10 @@ export type CreateFiberStrandInput = {
   zTermination?: string | null;
 };
 
+export type UpdateFiberStrandInput = Partial<CreateFiberStrandInput> & {
+  id: string;
+};
+
 export type CreateTransceiverInput = {
   deviceName: string;
   interfaceName: string;
@@ -723,6 +727,86 @@ export async function createFiberStrandInDb(input: CreateFiberStrandInput) {
       input.aTermination ?? null,
       input.zTermination ?? null,
       input.circuitCode ?? null
+    ]
+  );
+
+  const row = rows?.[0];
+  return row
+    ? {
+        id: row.id,
+        spanCode: row.span_code,
+        strandNumber: row.strand_number,
+        tubeColor: row.tube_color,
+        fiberColor: row.fiber_color,
+        status: row.status,
+        service: row.service,
+        circuitCode: row.circuit_code,
+        aTermination: row.a_termination,
+        zTermination: row.z_termination
+      }
+    : null;
+}
+
+export async function updateFiberStrandInDb(input: UpdateFiberStrandInput) {
+  const hasSpanCode = Object.hasOwn(input, "spanCode");
+  const hasCircuitCode = Object.hasOwn(input, "circuitCode");
+  const hasStrandNumber = Object.hasOwn(input, "strandNumber");
+  const hasTubeColor = Object.hasOwn(input, "tubeColor");
+  const hasFiberColor = Object.hasOwn(input, "fiberColor");
+  const hasStatus = Object.hasOwn(input, "status");
+  const hasService = Object.hasOwn(input, "service");
+  const hasATermination = Object.hasOwn(input, "aTermination");
+  const hasZTermination = Object.hasOwn(input, "zTermination");
+  const rows = await query<FiberStrandRow>(
+    `UPDATE fiber_strands fst
+     SET
+       span_id = CASE WHEN $10 THEN (SELECT id FROM fiber_spans WHERE code = $2) ELSE fst.span_id END,
+       circuit_id = CASE
+         WHEN $11 AND $3 IS NULL THEN NULL
+         WHEN $11 THEN (SELECT id FROM circuits WHERE code = $3)
+         ELSE fst.circuit_id
+       END,
+       strand_number = CASE WHEN $12 THEN $4 ELSE fst.strand_number END,
+       tube_color = CASE WHEN $13 THEN $5 ELSE fst.tube_color END,
+       fiber_color = CASE WHEN $14 THEN $6 ELSE fst.fiber_color END,
+       status = CASE WHEN $15 THEN $7 ELSE fst.status END,
+       service = CASE WHEN $16 THEN $8 ELSE fst.service END,
+       a_termination = CASE WHEN $17 THEN $9 ELSE fst.a_termination END,
+       z_termination = CASE WHEN $18 THEN $19 ELSE fst.z_termination END
+     WHERE fst.id = $1::uuid
+       AND (NOT $10 OR EXISTS (SELECT 1 FROM fiber_spans WHERE code = $2))
+       AND (NOT $11 OR $3 IS NULL OR EXISTS (SELECT 1 FROM circuits WHERE code = $3))
+     RETURNING
+       fst.id,
+       (SELECT fs.code FROM fiber_spans fs WHERE fs.id = fst.span_id) AS span_code,
+       fst.strand_number,
+       fst.tube_color,
+       fst.fiber_color,
+       fst.status,
+       fst.service,
+       (SELECT c.code FROM circuits c WHERE c.id = fst.circuit_id) AS circuit_code,
+       fst.a_termination,
+       fst.z_termination`,
+    [
+      input.id,
+      input.spanCode ?? null,
+      input.circuitCode ?? null,
+      input.strandNumber ?? null,
+      input.tubeColor ?? null,
+      input.fiberColor ?? null,
+      input.status ?? null,
+      input.service ?? null,
+      input.aTermination ?? null,
+      hasSpanCode,
+      hasCircuitCode,
+      hasStrandNumber,
+      hasTubeColor,
+      hasFiberColor,
+      hasStatus,
+      hasService,
+      hasATermination,
+      hasZTermination,
+      input.zTermination ?? null
     ]
   );
 

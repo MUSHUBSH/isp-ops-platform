@@ -1950,6 +1950,19 @@ function DatacenterView({
     aTermination: "",
     zTermination: ""
   });
+  const [selectedFiberStrandId, setSelectedFiberStrandId] = useState(fiberStrands[0]?.id ?? "");
+  const selectedFiberStrand = fiberStrands.find((strand) => strand.id === selectedFiberStrandId);
+  const [strandEditForm, setStrandEditForm] = useState({
+    spanCode: fiberStrands[0]?.spanCode ?? fiberSpans[0]?.code ?? "",
+    strandNumber: fiberStrands[0]?.strandNumber ? String(fiberStrands[0].strandNumber) : "1",
+    tubeColor: fiberStrands[0]?.tubeColor ?? "",
+    fiberColor: fiberStrands[0]?.fiberColor ?? "",
+    status: fiberStrands[0]?.status ?? "available",
+    service: fiberStrands[0]?.service ?? "",
+    circuitCode: fiberStrands[0]?.circuitCode ?? "",
+    aTermination: fiberStrands[0]?.aTermination ?? "",
+    zTermination: fiberStrands[0]?.zTermination ?? ""
+  });
   const [opticForm, setOpticForm] = useState({
     deviceName: "PE-AQP-01",
     interfaceName: "ether1",
@@ -2060,6 +2073,29 @@ function DatacenterView({
     }
   }, [selectedFiberSpan]);
 
+  useEffect(() => {
+    const currentStrandExists = fiberStrands.some((strand) => strand.id === selectedFiberStrandId);
+    if (!currentStrandExists) {
+      setSelectedFiberStrandId(fiberStrands[0]?.id ?? "");
+    }
+  }, [fiberStrands, selectedFiberStrandId]);
+
+  useEffect(() => {
+    if (selectedFiberStrand) {
+      setStrandEditForm({
+        spanCode: selectedFiberStrand.spanCode,
+        strandNumber: String(selectedFiberStrand.strandNumber),
+        tubeColor: selectedFiberStrand.tubeColor ?? "",
+        fiberColor: selectedFiberStrand.fiberColor ?? "",
+        status: selectedFiberStrand.status,
+        service: selectedFiberStrand.service ?? "",
+        circuitCode: selectedFiberStrand.circuitCode ?? "",
+        aTermination: selectedFiberStrand.aTermination ?? "",
+        zTermination: selectedFiberStrand.zTermination ?? ""
+      });
+    }
+  }, [selectedFiberStrand]);
+
   async function savePhysical(event: FormEvent<HTMLFormElement>, path: string, payload: Record<string, unknown>, reset: () => void) {
     event.preventDefault();
     setFormState("saving");
@@ -2134,6 +2170,31 @@ function DatacenterView({
         status: spanEditForm.status,
         notes: spanEditForm.notes || null,
         reason: "Edicion de tramo de fibra desde Datacenter"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateFiberStrand(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedFiberStrand) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/physical/fiber-strands/${selectedFiberStrand.id}`, {
+        spanCode: strandEditForm.spanCode,
+        strandNumber: Number(strandEditForm.strandNumber),
+        tubeColor: strandEditForm.tubeColor || null,
+        fiberColor: strandEditForm.fiberColor || null,
+        status: strandEditForm.status,
+        service: strandEditForm.service || null,
+        circuitCode: strandEditForm.circuitCode || null,
+        aTermination: strandEditForm.aTermination || null,
+        zTermination: strandEditForm.zTermination || null,
+        reason: "Edicion de hilo de fibra desde Datacenter"
       });
       await onReload();
       setFormState("saved");
@@ -2289,6 +2350,31 @@ function DatacenterView({
             <label>Z<input onChange={(event) => setStrandForm((current) => ({ ...current, zTermination: event.target.value }))} value={strandForm.zTermination} /></label>
             <button disabled={!strandForm.spanCode || !strandForm.strandNumber} type="submit">Guardar hilo</button>
           </form>
+          {selectedFiberStrand && (
+            <form className="quickForm" onSubmit={updateFiberStrand}>
+              <p className="eyebrow">Editar hilo</p>
+              <label className="wideField">Hilo<select onChange={(event) => setSelectedFiberStrandId(event.target.value)} value={selectedFiberStrandId}>
+                {fiberStrands.map((strand) => <option key={strand.id} value={strand.id}>{strand.spanCode} hilo {strand.strandNumber}</option>)}
+              </select></label>
+              <label className="wideField">Tramo<select onChange={(event) => setStrandEditForm((current) => ({ ...current, spanCode: event.target.value }))} value={strandEditForm.spanCode}>
+                {fiberSpans.map((span) => <option key={span.id} value={span.code}>{span.code}</option>)}
+              </select></label>
+              <label>Hilo<input inputMode="numeric" onChange={(event) => setStrandEditForm((current) => ({ ...current, strandNumber: event.target.value }))} value={strandEditForm.strandNumber} /></label>
+              <label>Estado<select onChange={(event) => setStrandEditForm((current) => ({ ...current, status: event.target.value }))} value={strandEditForm.status}>
+                <option value="available">available</option>
+                <option value="reserved">reserved</option>
+                <option value="used">used</option>
+                <option value="faulty">faulty</option>
+              </select></label>
+              <label>Tubo<input onChange={(event) => setStrandEditForm((current) => ({ ...current, tubeColor: event.target.value }))} value={strandEditForm.tubeColor} /></label>
+              <label>Color<input onChange={(event) => setStrandEditForm((current) => ({ ...current, fiberColor: event.target.value }))} value={strandEditForm.fiberColor} /></label>
+              <label>Circuito<input onChange={(event) => setStrandEditForm((current) => ({ ...current, circuitCode: event.target.value.toUpperCase() }))} value={strandEditForm.circuitCode} /></label>
+              <label className="wideField">Servicio<input onChange={(event) => setStrandEditForm((current) => ({ ...current, service: event.target.value }))} value={strandEditForm.service} /></label>
+              <label>A<input onChange={(event) => setStrandEditForm((current) => ({ ...current, aTermination: event.target.value }))} value={strandEditForm.aTermination} /></label>
+              <label>Z<input onChange={(event) => setStrandEditForm((current) => ({ ...current, zTermination: event.target.value }))} value={strandEditForm.zTermination} /></label>
+              <button disabled={!strandEditForm.spanCode || !strandEditForm.strandNumber} type="submit">Guardar hilo</button>
+            </form>
+          )}
         </div>
 
         <div className="panel">
