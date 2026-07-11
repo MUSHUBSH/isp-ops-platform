@@ -1122,6 +1122,12 @@ h2 {
   min-width: 0;
 }
 
+.physicalForms .panel .quickForm + .quickForm {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
 .physicalState {
   grid-column: 1 / -1;
 }
@@ -1768,18 +1774,8 @@ h2 {
   .mapLayout,
   .rackLayout,
   .deviceWorkbenchGrid,
-  
-.physicalGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.physicalGrid .panel {
-  min-width: 0;
-}
-
-.ipamWorkbench {
+  .physicalForms,
+  .ipamWorkbench {
     grid-template-columns: 1fr;
   }
 
