@@ -2878,6 +2878,23 @@ function CircuitsView({
     circuitCode: circuits[0]?.code ?? "",
     status: circuits[0]?.status ?? "active"
   });
+  const [circuitEditForm, setCircuitEditForm] = useState<{
+    code: string;
+    name: string;
+    providerCode: string;
+    contractCode: string;
+    status: string;
+    capacityMbps: string;
+    slaTarget: string;
+  }>({
+    code: circuits[0]?.code ?? "",
+    name: circuits[0]?.name ?? "",
+    providerCode: circuits[0]?.providerCode === "OWN" ? "" : circuits[0]?.providerCode ?? "",
+    contractCode: circuits[0]?.contractCode ?? "",
+    status: circuits[0]?.status ?? "active",
+    capacityMbps: circuits[0]?.capacityMbps ? String(circuits[0].capacityMbps) : "",
+    slaTarget: circuits[0]?.slaTarget ? String(circuits[0].slaTarget) : ""
+  });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const down = circuits.filter((circuit) => circuit.status === "down").length;
   const degraded = circuits.filter((circuit) => circuit.status === "degraded").length;
@@ -2886,6 +2903,21 @@ function CircuitsView({
   const selectedEndpointDevice = devices.find((device) => device.name === endpointForm.deviceName);
   const deviceInterfaces = interfaces.filter((networkInterface) => networkInterface.device === endpointForm.deviceName);
   const providerContracts = contracts.filter((contract) => contract.providerCode === circuitForm.providerCode);
+  const editProviderContracts = contracts.filter((contract) => contract.providerCode === circuitEditForm.providerCode);
+
+  useEffect(() => {
+    if (selectedCircuit) {
+      setCircuitEditForm({
+        code: selectedCircuit.code,
+        name: selectedCircuit.name,
+        providerCode: selectedCircuit.providerCode === "OWN" ? "" : selectedCircuit.providerCode,
+        contractCode: selectedCircuit.contractCode ?? "",
+        status: selectedCircuit.status,
+        capacityMbps: selectedCircuit.capacityMbps ? String(selectedCircuit.capacityMbps) : "",
+        slaTarget: selectedCircuit.slaTarget ? String(selectedCircuit.slaTarget) : ""
+      });
+    }
+  }, [selectedCircuit]);
 
   async function createCircuit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2924,6 +2956,30 @@ function CircuitsView({
         demarcation: endpointForm.demarcation || null,
         reason: "Alta de extremo desde modulo Circuitos"
       });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateCircuit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCircuit) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/circuits/${selectedCircuit.code}`, {
+        code: circuitEditForm.code,
+        name: circuitEditForm.name,
+        providerCode: circuitEditForm.providerCode || null,
+        contractCode: circuitEditForm.contractCode || null,
+        status: circuitEditForm.status,
+        capacityMbps: circuitEditForm.capacityMbps ? Number(circuitEditForm.capacityMbps) : null,
+        slaTarget: circuitEditForm.slaTarget ? Number(circuitEditForm.slaTarget) : null,
+        reason: "Edicion completa desde modulo Circuitos"
+      });
+      setOperationForm((current) => ({ ...current, circuitCode: circuitEditForm.code, status: circuitEditForm.status }));
       await onReload();
       setFormState("saved");
     } catch {
@@ -3024,6 +3080,27 @@ function CircuitsView({
         </div>
         <div className="panel">
           <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Estado y retiro seguro</h2></div></div>
+          {selectedCircuit && (
+            <form className="quickForm" onSubmit={updateCircuit}>
+              <p className="eyebrow">Editar circuito</p>
+              <label>Codigo<input onChange={(event) => setCircuitEditForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={circuitEditForm.code} /></label>
+              <label>Estado<select onChange={(event) => setCircuitEditForm((current) => ({ ...current, status: event.target.value }))} value={circuitEditForm.status}>
+                <option value="planned">planned</option><option value="active">active</option><option value="degraded">degraded</option><option value="down">down</option><option value="maintenance">maintenance</option><option value="retired">retired</option>
+              </select></label>
+              <label className="wideField">Nombre<input onChange={(event) => setCircuitEditForm((current) => ({ ...current, name: event.target.value }))} value={circuitEditForm.name} /></label>
+              <label>Proveedor<select onChange={(event) => setCircuitEditForm((current) => ({ ...current, providerCode: event.target.value, contractCode: "" }))} value={circuitEditForm.providerCode}>
+                <option value="">Propio / sin proveedor</option>
+                {providers.map((provider) => <option key={provider.id} value={provider.code}>{provider.code} - {provider.name}</option>)}
+              </select></label>
+              <label>Contrato<select onChange={(event) => setCircuitEditForm((current) => ({ ...current, contractCode: event.target.value }))} value={circuitEditForm.contractCode}>
+                <option value="">Sin contrato</option>
+                {editProviderContracts.map((contract) => <option key={contract.id} value={contract.code}>{contract.code} - {contract.status}</option>)}
+              </select></label>
+              <label>Mbps<input inputMode="numeric" onChange={(event) => setCircuitEditForm((current) => ({ ...current, capacityMbps: event.target.value }))} value={circuitEditForm.capacityMbps} /></label>
+              <label>SLA %<input inputMode="decimal" onChange={(event) => setCircuitEditForm((current) => ({ ...current, slaTarget: event.target.value }))} value={circuitEditForm.slaTarget} /></label>
+              <button disabled={!circuitEditForm.code || !circuitEditForm.name} type="submit">Guardar circuito</button>
+            </form>
+          )}
           <form className="quickForm" onSubmit={updateCircuitStatus}>
             <label className="wideField">Circuito<select onChange={(event) => {
               const next = circuits.find((circuit) => circuit.code === event.target.value);

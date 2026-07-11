@@ -262,7 +262,7 @@ export type Circuit = {
   providerCode: string;
   providerName?: string;
   contractCode?: string | null;
-  status: "active" | "degraded" | "down";
+  status: "active" | "degraded" | "down" | "maintenance" | "planned" | "retired";
   capacityMbps: number;
   aSite: string;
   zSite: string;

@@ -11,6 +11,7 @@ import {
   getCircuitImpactFromDb,
   listCircuitEndpointsFromDb,
   listCircuitsFromDb,
+  updateCircuitInDb,
   updateCircuitStatusInDb
 } from "./repository.js";
 
@@ -40,6 +41,10 @@ const createEndpointSchema = z.object({
 
 const updateCircuitStatusSchema = z.object({
   status: z.string().min(2).max(40),
+  reason: z.string().max(500).nullable().optional()
+});
+
+const updateCircuitSchema = createCircuitSchema.partial().omit({ reason: true }).extend({
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -85,6 +90,34 @@ export async function registerCircuitRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ circuit });
+  });
+
+  app.patch("/circuits/:code", { preHandler: requirePermission("circuits.write") }, async (request, reply) => {
+    const { code } = request.params as { code: string };
+    const parsed = updateCircuitSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid circuit payload", issues: parsed.error.issues });
+    }
+
+    const before = await getCircuitFromDb(code);
+    const circuit = await updateCircuitInDb({ codeOrId: code, ...parsed.data });
+
+    if (!circuit) {
+      return reply.code(409).send({ message: "Circuit not found, references invalid, or PostgreSQL unavailable" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "circuit.updated",
+      objectType: "circuit",
+      objectId: circuit.id,
+      beforeData: before,
+      afterData: circuit,
+      reason: parsed.data.reason ?? "Actualizacion de circuito"
+    });
+
+    return { circuit };
   });
 
   app.patch("/circuits/:code/status", { preHandler: requirePermission("circuits.write") }, async (request, reply) => {

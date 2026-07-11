@@ -47,6 +47,10 @@ export type CreateCircuitInput = {
   notes?: string | null;
 };
 
+export type UpdateCircuitInput = Partial<CreateCircuitInput> & {
+  codeOrId: string;
+};
+
 export type CreateCircuitEndpointInput = {
   circuitCode: string;
   siteCode?: string | null;
@@ -243,6 +247,111 @@ export async function updateCircuitStatusInDb(code: string, status: string) {
      LEFT JOIN contracts ct ON ct.id = u.contract_id
      LEFT JOIN endpoint_rollup er ON er.circuit_id = u.id`,
     [code, status]
+  );
+
+  return row ? mapCircuit(row) : null;
+}
+
+export async function updateCircuitInDb(input: UpdateCircuitInput) {
+  const hasCode = Object.hasOwn(input, "code");
+  const hasName = Object.hasOwn(input, "name");
+  const hasCircuitType = Object.hasOwn(input, "circuitType");
+  const hasProviderCode = Object.hasOwn(input, "providerCode");
+  const hasContractCode = Object.hasOwn(input, "contractCode");
+  const hasStatus = Object.hasOwn(input, "status");
+  const hasCapacityMbps = Object.hasOwn(input, "capacityMbps");
+  const hasSlaTarget = Object.hasOwn(input, "slaTarget");
+  const hasInstalledAt = Object.hasOwn(input, "installedAt");
+  const hasNotes = Object.hasOwn(input, "notes");
+  const row = await queryOne<CircuitRow>(
+    `WITH selected AS (
+       SELECT c.* FROM circuits c WHERE c.id::text = $1 OR c.code = $1
+     ),
+     target_provider AS (
+       SELECT id FROM providers WHERE code = $5
+     ),
+     target_contract AS (
+       SELECT id FROM contracts WHERE code = $6
+     ),
+     updated AS (
+       UPDATE circuits c
+       SET
+         code = CASE WHEN $12 THEN $2 ELSE c.code END,
+         name = CASE WHEN $13 THEN $3 ELSE c.name END,
+         circuit_type = CASE WHEN $14 THEN $4 ELSE c.circuit_type END,
+         provider_id = CASE
+           WHEN $15 AND $5 IS NULL THEN NULL
+           WHEN $15 THEN (SELECT id FROM target_provider)
+           ELSE c.provider_id
+         END,
+         contract_id = CASE
+           WHEN $16 AND $6 IS NULL THEN NULL
+           WHEN $16 THEN (SELECT id FROM target_contract)
+           ELSE c.contract_id
+         END,
+         status = CASE WHEN $17 THEN $7 ELSE c.status END,
+         capacity_mbps = CASE WHEN $18 THEN $8 ELSE c.capacity_mbps END,
+         sla_target = CASE WHEN $19 THEN $9 ELSE c.sla_target END,
+         installed_at = CASE WHEN $20 THEN $10::date ELSE c.installed_at END,
+         notes = CASE WHEN $21 THEN $11 ELSE c.notes END
+       WHERE c.id = (SELECT id FROM selected)
+         AND (NOT $15 OR $5 IS NULL OR EXISTS (SELECT 1 FROM target_provider))
+         AND (NOT $16 OR $6 IS NULL OR EXISTS (SELECT 1 FROM target_contract))
+       RETURNING c.*
+     ),
+     endpoint_rollup AS (
+       SELECT
+         ce.circuit_id,
+         MAX(s.code) FILTER (WHERE ce.label IN ('A', 'a')) AS a_site,
+         MAX(s.code) FILTER (WHERE ce.label IN ('Z', 'z', 'B', 'b')) AS z_site,
+         COUNT(ce.id) AS endpoint_count,
+         COUNT(ce.interface_id) AS linked_interfaces
+       FROM circuit_endpoints ce
+       LEFT JOIN sites s ON s.id = ce.site_id
+       WHERE ce.circuit_id = (SELECT id FROM updated)
+       GROUP BY ce.circuit_id
+     )
+     SELECT
+       u.id,
+       u.code,
+       u.name,
+       p.code AS provider_code,
+       p.name AS provider_name,
+       ct.code AS contract_code,
+       u.status,
+       u.capacity_mbps,
+       er.a_site,
+       er.z_site,
+       u.sla_target::text,
+       COALESCE(er.endpoint_count, 0) AS endpoint_count,
+       COALESCE(er.linked_interfaces, 0) AS linked_interfaces
+     FROM updated u
+     LEFT JOIN providers p ON p.id = u.provider_id
+     LEFT JOIN contracts ct ON ct.id = u.contract_id
+     LEFT JOIN endpoint_rollup er ON er.circuit_id = u.id`,
+    [
+      input.codeOrId,
+      input.code ?? null,
+      input.name ?? null,
+      input.circuitType ?? null,
+      input.providerCode ?? null,
+      input.contractCode ?? null,
+      input.status ?? null,
+      input.capacityMbps ?? null,
+      input.slaTarget ?? null,
+      input.installedAt ?? null,
+      input.notes ?? null,
+      hasCode,
+      hasName,
+      hasCircuitType,
+      hasProviderCode,
+      hasContractCode,
+      hasStatus,
+      hasCapacityMbps,
+      hasSlaTarget,
+      hasInstalledAt,
+      hasNotes
+    ]
   );
 
   return row ? mapCircuit(row) : null;
