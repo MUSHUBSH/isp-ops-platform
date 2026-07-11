@@ -37,6 +37,10 @@ export type CreateChangeInput = {
   }>;
 };
 
+export type UpdateChangeInput = Partial<CreateChangeInput> & {
+  id: string;
+};
+
 function mapChange(row: ChangeRow) {
   return {
     id: row.id,
@@ -165,6 +169,52 @@ export async function approveChangeInDb(changeId: string, actorId: string | null
   );
 
   return row ? mapChange(row) : null;
+}
+
+export async function updateChangeInDb(input: UpdateChangeInput) {
+  const row = await queryOne<{ id: string }>(
+    `UPDATE change_requests
+     SET
+       title = CASE WHEN $2::boolean THEN $3 ELSE title END,
+       description = CASE WHEN $4::boolean THEN $5 ELSE description END,
+       risk_level = CASE WHEN $6::boolean THEN $7 ELSE risk_level END,
+       planned_start = CASE WHEN $8::boolean THEN $9::timestamptz ELSE planned_start END,
+       planned_end = CASE WHEN $10::boolean THEN $11::timestamptz ELSE planned_end END,
+       updated_at = now()
+     WHERE id = $1::uuid
+     RETURNING id`,
+    [
+      input.id,
+      Object.hasOwn(input, "title"),
+      input.title ?? null,
+      Object.hasOwn(input, "description"),
+      input.description ?? null,
+      Object.hasOwn(input, "riskLevel"),
+      input.riskLevel ?? null,
+      Object.hasOwn(input, "plannedStart"),
+      input.plannedStart ?? null,
+      Object.hasOwn(input, "plannedEnd"),
+      input.plannedEnd ?? null
+    ]
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  if (Object.hasOwn(input, "impacts")) {
+    await query("DELETE FROM change_impacts WHERE change_request_id = $1::uuid", [input.id]);
+
+    for (const impact of input.impacts ?? []) {
+      await query(
+        `INSERT INTO change_impacts (change_request_id, object_type, object_id, impact_type, notes)
+         VALUES ($1::uuid, $2, $3::uuid, $4, $5)`,
+        [input.id, impact.objectType, impact.objectId, impact.impactType, impact.notes ?? null]
+      );
+    }
+  }
+
+  return getChangeFromDb(input.id);
 }
 
 export async function updateChangeStatusInDb(changeId: string, status: string) {

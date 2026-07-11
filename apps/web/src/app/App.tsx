@@ -3410,6 +3410,10 @@ function formStateLabel(state: "idle" | "saving" | "saved" | "error") {
   return "API requerida para guardar";
 }
 
+function toDateTimeLocal(value?: string | null) {
+  return value ? value.slice(0, 16) : "";
+}
+
 function formatMbps(value: number | null | undefined) {
   const safeValue = value ?? 0;
 
@@ -5696,6 +5700,16 @@ function ChangesView({
     changeId: changes[0]?.id ?? "",
     status: changes[0]?.status ?? "submitted"
   });
+  const [changeEditForm, setChangeEditForm] = useState({
+    title: changes[0]?.title ?? "",
+    description: changes[0]?.description ?? "",
+    riskLevel: changes[0]?.riskLevel ?? "medium",
+    plannedStart: toDateTimeLocal(changes[0]?.plannedStart),
+    plannedEnd: toDateTimeLocal(changes[0]?.plannedEnd),
+    objectKey: objectOptions[0] ? `${objectOptions[0].type}:${objectOptions[0].id}` : "",
+    impactType: "service_risk",
+    notes: ""
+  });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const selectedChange = changes.find((change) => change.id === operationForm.changeId);
   const submitted = changes.filter((change) => change.status === "submitted").length;
@@ -5706,6 +5720,37 @@ function ChangesView({
     const [objectType, objectId] = key.split(":");
     return { objectId, objectType };
   }
+
+  useEffect(() => {
+    if (!selectedChange) {
+      return;
+    }
+
+    setChangeEditForm((current) => ({
+      ...current,
+      title: selectedChange.title,
+      description: selectedChange.description,
+      riskLevel: selectedChange.riskLevel,
+      plannedStart: toDateTimeLocal(selectedChange.plannedStart),
+      plannedEnd: toDateTimeLocal(selectedChange.plannedEnd)
+    }));
+
+    apiGet<{ impacts: Array<{ objectType: string; objectId: string; impactType: string; notes: string | null }> }>(`/changes/${selectedChange.id}/impacts`)
+      .then(({ impacts }) => {
+        const impact = impacts[0];
+        if (!impact) {
+          return;
+        }
+
+        setChangeEditForm((current) => ({
+          ...current,
+          objectKey: `${impact.objectType}:${impact.objectId}`,
+          impactType: impact.impactType,
+          notes: impact.notes ?? ""
+        }));
+      })
+      .catch(() => undefined);
+  }, [selectedChange]);
 
   async function createChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5765,6 +5810,35 @@ function ChangesView({
     }
   }
 
+  async function updateChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedChange) return;
+
+    const objectRef = splitObjectKey(changeEditForm.objectKey);
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/changes/${selectedChange.id}`, {
+        title: changeEditForm.title,
+        description: changeEditForm.description,
+        riskLevel: changeEditForm.riskLevel,
+        plannedStart: changeEditForm.plannedStart || null,
+        plannedEnd: changeEditForm.plannedEnd || null,
+        impacts: changeEditForm.objectKey ? [{
+          objectType: objectRef.objectType,
+          objectId: objectRef.objectId,
+          impactType: changeEditForm.impactType,
+          notes: changeEditForm.notes || null
+        }] : [],
+        reason: "Edicion desde modulo Cambios"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
   async function deleteChange() {
     if (!selectedChange) return;
     setFormState("saving");
@@ -5810,8 +5884,8 @@ function ChangesView({
           </form>
         </div>
         <div className="panel">
-          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Estado y aprobacion</h2></div></div>
-          <form className="quickForm" onSubmit={updateChangeStatus}>
+          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Editar cambio</h2></div></div>
+          <form className="quickForm" onSubmit={updateChange}>
             <label className="wideField">Cambio<select onChange={(event) => {
               const next = changes.find((change) => change.id === event.target.value);
               setOperationForm({ changeId: event.target.value, status: next?.status ?? "submitted" });
@@ -5819,7 +5893,24 @@ function ChangesView({
               <option value="">Seleccionar</option>
               {changes.map((change) => <option key={change.id} value={change.id}>{change.title}</option>)}
             </select></label>
-            <label>Estado<select onChange={(event) => setOperationForm((current) => ({ ...current, status: event.target.value }))} value={operationForm.status}>
+            <label className="wideField">Titulo<input disabled={!selectedChange} onChange={(event) => setChangeEditForm((current) => ({ ...current, title: event.target.value }))} value={changeEditForm.title} /></label>
+            <label>Riesgo<select disabled={!selectedChange} onChange={(event) => setChangeEditForm((current) => ({ ...current, riskLevel: event.target.value }))} value={changeEditForm.riskLevel}>
+              <option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="critical">critical</option>
+            </select></label>
+            <label>Impacto<select disabled={!selectedChange} onChange={(event) => setChangeEditForm((current) => ({ ...current, impactType: event.target.value }))} value={changeEditForm.impactType}>
+              <option value="service_risk">service_risk</option><option value="outage">outage</option><option value="capacity">capacity</option><option value="routing">routing</option><option value="documentation">documentation</option>
+            </select></label>
+            <label>Inicio<input disabled={!selectedChange} onChange={(event) => setChangeEditForm((current) => ({ ...current, plannedStart: event.target.value }))} type="datetime-local" value={changeEditForm.plannedStart} /></label>
+            <label>Fin<input disabled={!selectedChange} onChange={(event) => setChangeEditForm((current) => ({ ...current, plannedEnd: event.target.value }))} type="datetime-local" value={changeEditForm.plannedEnd} /></label>
+            <label className="wideField">Objeto impactado<select disabled={!selectedChange} onChange={(event) => setChangeEditForm((current) => ({ ...current, objectKey: event.target.value }))} value={changeEditForm.objectKey}>
+              {objectOptions.map((option) => <option key={`${option.type}:${option.id}`} value={`${option.type}:${option.id}`}>{option.type} - {option.label}</option>)}
+            </select></label>
+            <label className="wideField">Descripcion<textarea disabled={!selectedChange} onChange={(event) => setChangeEditForm((current) => ({ ...current, description: event.target.value }))} value={changeEditForm.description} /></label>
+            <label className="wideField">Notas de impacto<input disabled={!selectedChange} onChange={(event) => setChangeEditForm((current) => ({ ...current, notes: event.target.value }))} value={changeEditForm.notes} /></label>
+            <button disabled={!selectedChange || !changeEditForm.title || !changeEditForm.description} type="submit">Guardar cambio</button>
+          </form>
+          <form className="quickForm compactForm" onSubmit={updateChangeStatus}>
+            <label>Estado<select disabled={!selectedChange} onChange={(event) => setOperationForm((current) => ({ ...current, status: event.target.value }))} value={operationForm.status}>
               <option value="submitted">submitted</option><option value="approved">approved</option><option value="in_progress">in_progress</option><option value="completed">completed</option><option value="cancelled">cancelled</option>
             </select></label>
             <button disabled={!selectedChange} type="submit">Actualizar estado</button>

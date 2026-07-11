@@ -9,6 +9,7 @@ import {
   getChangeFromDb,
   getChangeImpactsFromDb,
   listChangesFromDb,
+  updateChangeInDb,
   updateChangeStatusInDb
 } from "./repository.js";
 
@@ -33,6 +34,10 @@ const createChangeSchema = z.object({
 
 const updateChangeStatusSchema = z.object({
   status: z.string().min(2).max(40),
+  reason: z.string().max(500).nullable().optional()
+});
+
+const updateChangeSchema = createChangeSchema.partial().extend({
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -95,6 +100,37 @@ export async function registerChangeRoutes(app: FastifyInstance) {
       objectId: change.id,
       afterData: change,
       reason: "Cambio aprobado"
+    });
+
+    return { change };
+  });
+
+  app.patch("/changes/:id", { preHandler: requirePermission("changes.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateChangeSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid change payload", issues: parsed.error.issues });
+    }
+
+    const before = await getChangeFromDb(id);
+    const change = await updateChangeInDb({
+      id,
+      ...parsed.data
+    });
+
+    if (!change) {
+      return reply.code(404).send({ message: "Change not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "change.updated",
+      objectType: "change_request",
+      objectId: change.id,
+      beforeData: before,
+      afterData: change,
+      reason: parsed.data.reason ?? "Actualizacion de solicitud de cambio"
     });
 
     return { change };
