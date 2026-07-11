@@ -4686,6 +4686,20 @@ function MonitoringView({
     }
   }
 
+  async function deleteAlert() {
+    if (!selectedAlert) return;
+    setFormState("saving");
+
+    try {
+      await apiDelete(`/monitoring/alerts/${selectedAlert.id}`);
+      setAlertOperationForm({ alertId: "", status: "acknowledged" });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
   async function createMaintenance(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const objectRef = splitObjectKey(maintenanceForm.objectKey);
@@ -4784,6 +4798,7 @@ function MonitoringView({
             <button disabled={!selectedAlert} type="submit">Cambiar estado</button>
             <button disabled={!selectedAlert} onClick={() => void acknowledgeAlert()} type="button">ACK</button>
             <button disabled={!selectedAlert} onClick={() => void createIncidentFromAlert()} type="button">Crear incidencia</button>
+            <button className="dangerButton" disabled={!selectedAlert} onClick={() => void deleteAlert()} type="button">Eliminar alerta</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
           </form>
           {selectedAlert && (

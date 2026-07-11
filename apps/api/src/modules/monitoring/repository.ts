@@ -196,6 +196,17 @@ export async function updateAlertStatusInDb(alertId: string, status: string) {
   return row ? mapAlert(row) : null;
 }
 
+export async function deleteAlertInDb(alertId: string) {
+  const row = await queryOne<{ id: string }>(
+    `DELETE FROM alerts
+     WHERE id = $1::uuid
+     RETURNING id`,
+    [alertId]
+  );
+
+  return row ?? null;
+}
+
 export async function listMaintenanceWindowsFromDb() {
   const rows = await query<MaintenanceRow>(
     `SELECT id, object_type, object_id::text, title, status, starts_at::text, ends_at::text

@@ -8,6 +8,7 @@ import {
   createAlertInDb,
   createMaintenanceWindowInDb,
   deleteMaintenanceWindowInDb,
+  deleteAlertInDb,
   listAlertsFromDb,
   listMaintenanceWindowsFromDb,
   updateMaintenanceWindowInDb,
@@ -131,6 +132,25 @@ export async function registerMonitoringRoutes(app: FastifyInstance) {
     });
 
     return { alert };
+  });
+
+  app.delete("/monitoring/alerts/:id", { preHandler: requirePermission("alerts.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const deleted = await deleteAlertInDb(id);
+
+    if (!deleted) {
+      return reply.code(404).send({ message: "Alert not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "alert.deleted",
+      objectType: "alert",
+      objectId: deleted.id,
+      reason: "Eliminacion manual desde consola NOC"
+    });
+
+    return { deleted };
   });
 
   app.get("/monitoring/maintenance-windows", async () => ({
