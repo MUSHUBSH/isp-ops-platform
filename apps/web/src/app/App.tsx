@@ -27,6 +27,7 @@ import type {
   BackupSummary,
   ChangeRequest,
   Circuit,
+  CircuitEndpoint,
   ConfigBackup,
   DatacenterAsset,
   Device,
@@ -2874,6 +2875,16 @@ function CircuitsView({
     label: "A",
     demarcation: ""
   });
+  const [circuitEndpoints, setCircuitEndpoints] = useState<CircuitEndpoint[]>([]);
+  const [selectedEndpointId, setSelectedEndpointId] = useState("");
+  const selectedCircuitEndpoint = circuitEndpoints.find((endpoint) => endpoint.id === selectedEndpointId);
+  const [endpointEditForm, setEndpointEditForm] = useState({
+    siteCode: "",
+    deviceName: "",
+    interfaceName: "",
+    label: "A",
+    demarcation: ""
+  });
   const [operationForm, setOperationForm] = useState<{ circuitCode: string; status: string }>({
     circuitCode: circuits[0]?.code ?? "",
     status: circuits[0]?.status ?? "active"
@@ -2902,8 +2913,48 @@ function CircuitsView({
   const selectedCircuit = circuits.find((circuit) => circuit.code === operationForm.circuitCode);
   const selectedEndpointDevice = devices.find((device) => device.name === endpointForm.deviceName);
   const deviceInterfaces = interfaces.filter((networkInterface) => networkInterface.device === endpointForm.deviceName);
+  const selectedEndpointEditDevice = devices.find((device) => device.name === endpointEditForm.deviceName);
+  const endpointEditInterfaces = interfaces.filter((networkInterface) => networkInterface.device === endpointEditForm.deviceName);
   const providerContracts = contracts.filter((contract) => contract.providerCode === circuitForm.providerCode);
   const editProviderContracts = contracts.filter((contract) => contract.providerCode === circuitEditForm.providerCode);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!selectedCircuit) {
+      setCircuitEndpoints([]);
+      setSelectedEndpointId("");
+      return;
+    }
+
+    apiGet<{ endpoints: CircuitEndpoint[] }>(`/circuits/${selectedCircuit.code}/endpoints`)
+      .then((payload) => {
+        if (!active) return;
+        setCircuitEndpoints(payload.endpoints);
+        setSelectedEndpointId((current) => (payload.endpoints.some((endpoint) => endpoint.id === current) ? current : payload.endpoints[0]?.id ?? ""));
+      })
+      .catch(() => {
+        if (!active) return;
+        setCircuitEndpoints([]);
+        setSelectedEndpointId("");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCircuit]);
+
+  useEffect(() => {
+    if (selectedCircuitEndpoint) {
+      setEndpointEditForm({
+        siteCode: selectedCircuitEndpoint.siteCode ?? "",
+        deviceName: selectedCircuitEndpoint.device ?? "",
+        interfaceName: selectedCircuitEndpoint.interface ?? "",
+        label: selectedCircuitEndpoint.label,
+        demarcation: selectedCircuitEndpoint.demarcation ?? ""
+      });
+    }
+  }, [selectedCircuitEndpoint]);
 
   useEffect(() => {
     if (selectedCircuit) {
@@ -2956,6 +3007,33 @@ function CircuitsView({
         demarcation: endpointForm.demarcation || null,
         reason: "Alta de extremo desde modulo Circuitos"
       });
+      await onReload();
+      const payload = await apiGet<{ endpoints: CircuitEndpoint[] }>(`/circuits/${endpointForm.circuitCode}/endpoints`);
+      setCircuitEndpoints(payload.endpoints);
+      setSelectedEndpointId((current) => (payload.endpoints.some((endpoint) => endpoint.id === current) ? current : payload.endpoints[0]?.id ?? ""));
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateEndpoint(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCircuit || !selectedCircuitEndpoint) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/circuits/${selectedCircuit.code}/endpoints/${selectedCircuitEndpoint.id}`, {
+        siteCode: endpointEditForm.siteCode || null,
+        deviceName: endpointEditForm.deviceName || null,
+        interfaceName: endpointEditForm.interfaceName || null,
+        label: endpointEditForm.label,
+        demarcation: endpointEditForm.demarcation || null,
+        reason: "Edicion de extremo desde modulo Circuitos"
+      });
+      const payload = await apiGet<{ endpoints: CircuitEndpoint[] }>(`/circuits/${selectedCircuit.code}/endpoints`);
+      setCircuitEndpoints(payload.endpoints);
+      setSelectedEndpointId((current) => (payload.endpoints.some((endpoint) => endpoint.id === current) ? current : payload.endpoints[0]?.id ?? ""));
       await onReload();
       setFormState("saved");
     } catch {
@@ -3077,6 +3155,32 @@ function CircuitsView({
             <button disabled={!endpointForm.circuitCode || !endpointForm.label} type="submit">Agregar extremo</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
           </form>
+          {selectedCircuitEndpoint && (
+            <form className="quickForm" onSubmit={updateEndpoint}>
+              <p className="eyebrow">Editar extremo</p>
+              <label className="wideField">Extremo<select onChange={(event) => setSelectedEndpointId(event.target.value)} value={selectedEndpointId}>
+                {circuitEndpoints.map((endpoint) => <option key={endpoint.id} value={endpoint.id}>{endpoint.label} - {endpoint.siteCode ?? "sin sede"} - {endpoint.demarcation ?? endpoint.interface ?? "sin demarcacion"}</option>)}
+              </select></label>
+              <label>Etiqueta<select onChange={(event) => setEndpointEditForm((current) => ({ ...current, label: event.target.value }))} value={endpointEditForm.label}>
+                <option value="A">A</option><option value="Z">Z</option><option value="B">B</option><option value="handoff">handoff</option><option value="backup">backup</option>
+              </select></label>
+              <label>Sede<select onChange={(event) => setEndpointEditForm((current) => ({ ...current, siteCode: event.target.value, deviceName: "", interfaceName: "" }))} value={endpointEditForm.siteCode}>
+                <option value="">Sin sede</option>
+                {sites.map((site) => <option key={site.id} value={site.code}>{site.code} - {site.name}</option>)}
+              </select></label>
+              <label>Equipo<select onChange={(event) => setEndpointEditForm((current) => ({ ...current, deviceName: event.target.value, interfaceName: "" }))} value={endpointEditForm.deviceName}>
+                <option value="">Sin equipo</option>
+                {devices.filter((device) => !endpointEditForm.siteCode || device.siteCode === endpointEditForm.siteCode).map((device) => <option key={device.id} value={device.name}>{device.name}</option>)}
+              </select></label>
+              <label>Interfaz<select disabled={!selectedEndpointEditDevice} onChange={(event) => setEndpointEditForm((current) => ({ ...current, interfaceName: event.target.value }))} value={endpointEditForm.interfaceName}>
+                <option value="">Sin interfaz</option>
+                {endpointEditInterfaces.map((networkInterface) => <option key={networkInterface.id} value={networkInterface.name}>{networkInterface.name} - {networkInterface.status}</option>)}
+              </select></label>
+              <label className="wideField">Demarcacion<input onChange={(event) => setEndpointEditForm((current) => ({ ...current, demarcation: event.target.value }))} placeholder="ODF, bandeja, puerto, sala, poste o handoff" value={endpointEditForm.demarcation} /></label>
+              <button disabled={!endpointEditForm.label} type="submit">Guardar extremo</button>
+              <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+            </form>
+          )}
         </div>
         <div className="panel">
           <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Estado y retiro seguro</h2></div></div>

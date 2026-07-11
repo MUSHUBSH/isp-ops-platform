@@ -60,6 +60,10 @@ export type CreateCircuitEndpointInput = {
   demarcation?: string | null;
 };
 
+export type UpdateCircuitEndpointInput = Partial<CreateCircuitEndpointInput> & {
+  id: string;
+};
+
 function mapCircuit(row: CircuitRow) {
   return {
     id: row.id,
@@ -484,6 +488,93 @@ export async function createCircuitEndpointInDb(input: CreateCircuitEndpointInpu
       input.interfaceName ?? null,
       input.label,
       input.demarcation ?? null
+    ]
+  );
+
+  return row ? mapEndpoint(row) : null;
+}
+
+export async function updateCircuitEndpointInDb(input: UpdateCircuitEndpointInput) {
+  const hasCircuitCode = Object.hasOwn(input, "circuitCode");
+  const hasSiteCode = Object.hasOwn(input, "siteCode");
+  const hasDeviceName = Object.hasOwn(input, "deviceName");
+  const hasInterfaceName = Object.hasOwn(input, "interfaceName");
+  const hasLabel = Object.hasOwn(input, "label");
+  const hasDemarcation = Object.hasOwn(input, "demarcation");
+  const row = await queryOne<EndpointRow>(
+    `WITH current_endpoint AS (
+       SELECT ce.* FROM circuit_endpoints ce WHERE ce.id = $1::uuid
+     ),
+     selected_circuit AS (
+       SELECT id, code FROM circuits WHERE code = $2
+     ),
+     selected_site AS (
+       SELECT id, code FROM sites WHERE code = $3
+     ),
+     selected_device AS (
+       SELECT d.id, d.name FROM devices d WHERE d.name = $4
+     ),
+     selected_interface AS (
+       SELECT i.id, i.name
+       FROM interfaces i
+       JOIN devices d ON d.id = i.device_id
+       WHERE d.name = $4 AND i.name = $5
+     ),
+     updated AS (
+       UPDATE circuit_endpoints ce
+       SET
+         circuit_id = CASE WHEN $8 THEN (SELECT id FROM selected_circuit) ELSE ce.circuit_id END,
+         site_id = CASE
+           WHEN $9 AND $3 IS NULL THEN NULL
+           WHEN $9 THEN (SELECT id FROM selected_site)
+           ELSE ce.site_id
+         END,
+         device_id = CASE
+           WHEN $10 AND $4 IS NULL THEN NULL
+           WHEN $10 THEN (SELECT id FROM selected_device)
+           ELSE ce.device_id
+         END,
+         interface_id = CASE
+           WHEN $11 AND $5 IS NULL THEN NULL
+           WHEN $11 THEN (SELECT id FROM selected_interface)
+           ELSE ce.interface_id
+         END,
+         label = CASE WHEN $12 THEN $6 ELSE ce.label END,
+         demarcation = CASE WHEN $13 THEN $7 ELSE ce.demarcation END
+       WHERE ce.id = (SELECT id FROM current_endpoint)
+         AND (NOT $8 OR EXISTS (SELECT 1 FROM selected_circuit))
+         AND (NOT $9 OR $3 IS NULL OR EXISTS (SELECT 1 FROM selected_site))
+         AND (NOT $10 OR $4 IS NULL OR EXISTS (SELECT 1 FROM selected_device))
+         AND (NOT $11 OR $5 IS NULL OR EXISTS (SELECT 1 FROM selected_interface))
+       RETURNING ce.*
+     )
+     SELECT
+       u.id,
+       c.code AS circuit_code,
+       s.code AS site_code,
+       d.name AS device,
+       i.name AS interface,
+       u.label,
+       u.demarcation
+     FROM updated u
+     JOIN circuits c ON c.id = u.circuit_id
+     LEFT JOIN sites s ON s.id = u.site_id
+     LEFT JOIN devices d ON d.id = u.device_id
+     LEFT JOIN interfaces i ON i.id = u.interface_id`,
+    [
+      input.id,
+      input.circuitCode ?? null,
+      input.siteCode ?? null,
+      input.deviceName ?? null,
+      input.interfaceName ?? null,
+      input.label ?? null,
+      input.demarcation ?? null,
+      hasCircuitCode,
+      hasSiteCode,
+      hasDeviceName,
+      hasInterfaceName,
+      hasLabel,
+      hasDemarcation
     ]
   );
 

@@ -11,6 +11,7 @@ import {
   getCircuitImpactFromDb,
   listCircuitEndpointsFromDb,
   listCircuitsFromDb,
+  updateCircuitEndpointInDb,
   updateCircuitInDb,
   updateCircuitStatusInDb
 } from "./repository.js";
@@ -45,6 +46,10 @@ const updateCircuitStatusSchema = z.object({
 });
 
 const updateCircuitSchema = createCircuitSchema.partial().omit({ reason: true }).extend({
+  reason: z.string().max(500).nullable().optional()
+});
+
+const updateEndpointSchema = createEndpointSchema.partial().omit({ reason: true }).extend({
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -237,5 +242,32 @@ export async function registerCircuitRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ endpoint });
+  });
+
+  app.patch("/circuits/:code/endpoints/:id", { preHandler: requirePermission("circuits.write") }, async (request, reply) => {
+    const { code, id } = request.params as { code: string; id: string };
+    const body = request.body && typeof request.body === "object" ? { ...(request.body as object), circuitCode: code } : { circuitCode: code };
+    const parsed = updateEndpointSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid circuit endpoint payload", issues: parsed.error.issues });
+    }
+
+    const endpoint = await updateCircuitEndpointInDb({ id, ...parsed.data });
+
+    if (!endpoint) {
+      return reply.code(409).send({ message: "Endpoint not found, references invalid, or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "circuit_endpoint.updated",
+      objectType: "circuit_endpoint",
+      objectId: endpoint.id,
+      afterData: endpoint,
+      reason: parsed.data.reason ?? "Actualizacion de extremo de circuito"
+    });
+
+    return { endpoint };
   });
 }

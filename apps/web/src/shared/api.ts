@@ -271,6 +271,16 @@ export type Circuit = {
   linkedInterfaces?: number;
 };
 
+export type CircuitEndpoint = {
+  id: string;
+  circuitCode: string;
+  siteCode: string | null;
+  device: string | null;
+  interface: string | null;
+  label: string;
+  demarcation: string | null;
+};
+
 export type RackView = {
   id: string;
   siteCode: string;
