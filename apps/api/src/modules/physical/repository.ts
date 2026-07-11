@@ -209,6 +209,10 @@ export type CreateDatacenterAssetInput = {
   notes?: string | null;
 };
 
+export type UpdateDatacenterAssetInput = Partial<CreateDatacenterAssetInput> & {
+  id: string;
+};
+
 function numberOrNull(value: string | number | null) {
   return value === null ? null : Number(value);
 }
@@ -1244,6 +1248,92 @@ export async function createDatacenterAssetInDb(input: CreateDatacenterAssetInpu
       input.status ?? "active",
       input.units ?? null,
       input.ports ?? null,
+      input.notes ?? null
+    ]
+  );
+
+  const row = rows?.[0];
+  return row
+    ? {
+        id: row.id,
+        siteCode: row.site_code,
+        rackCode: row.rack_code,
+        name: row.name,
+        assetType: row.asset_type,
+        status: row.status,
+        units: row.units,
+        ports: row.ports,
+        notes: row.notes
+      }
+    : null;
+}
+
+export async function updateDatacenterAssetInDb(input: UpdateDatacenterAssetInput) {
+  const hasSiteCode = Object.hasOwn(input, "siteCode");
+  const hasRackCode = Object.hasOwn(input, "rackCode");
+  const hasName = Object.hasOwn(input, "name");
+  const hasAssetType = Object.hasOwn(input, "assetType");
+  const hasStatus = Object.hasOwn(input, "status");
+  const hasUnits = Object.hasOwn(input, "units");
+  const hasPorts = Object.hasOwn(input, "ports");
+  const hasNotes = Object.hasOwn(input, "notes");
+  const rows = await query<DatacenterAssetRow>(
+    `WITH current_asset AS (
+       SELECT
+         da.*,
+         CASE WHEN $9 THEN (SELECT id FROM sites WHERE code = $2) ELSE da.site_id END AS target_site_id
+       FROM datacenter_assets da
+       WHERE da.id = $1::uuid
+     )
+     UPDATE datacenter_assets da
+     SET
+       site_id = CASE WHEN $9 THEN current_asset.target_site_id ELSE da.site_id END,
+       rack_id = CASE
+         WHEN $10 AND $3 IS NULL THEN NULL
+         WHEN $10 THEN (SELECT r.id FROM racks r WHERE r.site_id = current_asset.target_site_id AND r.code = $3)
+         ELSE da.rack_id
+       END,
+       name = CASE WHEN $11 THEN $4 ELSE da.name END,
+       asset_type = CASE WHEN $12 THEN $5 ELSE da.asset_type END,
+       status = CASE WHEN $13 THEN $6 ELSE da.status END,
+       units = CASE WHEN $14 THEN $7 ELSE da.units END,
+       ports = CASE WHEN $15 THEN $8 ELSE da.ports END,
+       notes = CASE WHEN $16 THEN $17 ELSE da.notes END
+     FROM current_asset
+     WHERE da.id = current_asset.id
+       AND current_asset.target_site_id IS NOT NULL
+       AND (
+         NOT $10
+         OR $3 IS NULL
+         OR EXISTS (SELECT 1 FROM racks r WHERE r.site_id = current_asset.target_site_id AND r.code = $3)
+       )
+     RETURNING
+       da.id,
+       (SELECT s.code FROM sites s WHERE s.id = da.site_id) AS site_code,
+       (SELECT r.code FROM racks r WHERE r.id = da.rack_id) AS rack_code,
+       da.name,
+       da.asset_type,
+       da.status,
+       da.units,
+       da.ports,
+       da.notes`,
+    [
+      input.id,
+      input.siteCode ?? null,
+      input.rackCode ?? null,
+      input.name ?? null,
+      input.assetType ?? null,
+      input.status ?? null,
+      input.units ?? null,
+      input.ports ?? null,
+      hasSiteCode,
+      hasRackCode,
+      hasName,
+      hasAssetType,
+      hasStatus,
+      hasUnits,
+      hasPorts,
+      hasNotes,
       input.notes ?? null
     ]
   );

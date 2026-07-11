@@ -25,6 +25,7 @@ import {
   listProviderCapacitiesFromDb,
   listTransceiversFromDb,
   resolvePhysicalKind,
+  updateDatacenterAssetInDb,
   updateFiberSpanInDb,
   updateFiberStrandInDb,
   updatePatchcordInDb,
@@ -142,6 +143,10 @@ const datacenterAssetSchema = z.object({
   units: nullableNumber,
   ports: nullableNumber,
   notes: nullableString,
+  reason: nullableString
+});
+
+const updateDatacenterAssetSchema = datacenterAssetSchema.partial().omit({ reason: true }).extend({
   reason: nullableString
 });
 
@@ -313,6 +318,18 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     if (!asset) return reply.code(503).send({ message: "PostgreSQL is required to create datacenter assets" });
     await auditCreated(request, "physical.datacenter_asset.created", "datacenter_asset", asset, asset, parsed.data.reason);
     return reply.code(201).send({ asset });
+  });
+
+  app.patch("/physical/datacenter-assets/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateDatacenterAssetSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const asset = await updateDatacenterAssetInDb({ id, ...parsed.data });
+    if (!asset) return reply.code(409).send({ message: "Datacenter asset not found, references invalid, or PostgreSQL is required" });
+
+    await auditMutation(request, "physical.datacenter_asset.updated", "datacenter_asset", asset.id, asset, parsed.data.reason);
+    return { asset };
   });
 
   app.patch("/physical/:kind/:id/status", { preHandler: requirePermission("physical.write") }, async (request, reply) => {

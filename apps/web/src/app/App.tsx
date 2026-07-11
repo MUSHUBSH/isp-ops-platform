@@ -2043,6 +2043,18 @@ function DatacenterView({
     status: "active",
     notes: ""
   });
+  const [selectedDatacenterAssetId, setSelectedDatacenterAssetId] = useState(assets[0]?.id ?? "");
+  const selectedDatacenterAsset = assets.find((asset) => asset.id === selectedDatacenterAssetId);
+  const [assetEditForm, setAssetEditForm] = useState({
+    siteCode: assets[0]?.siteCode ?? "AQP-POP",
+    rackCode: assets[0]?.rackCode ?? "",
+    name: assets[0]?.name ?? "",
+    assetType: assets[0]?.assetType ?? "ODF",
+    units: assets[0]?.units ? String(assets[0].units) : "",
+    ports: assets[0]?.ports ? String(assets[0].ports) : "",
+    status: assets[0]?.status ?? "active",
+    notes: assets[0]?.notes ?? ""
+  });
   const physicalRecords = [
     ...capacities.map((item) => ({ id: item.id, kind: "provider-capacities", label: `${item.providerCode} ${item.serviceType}`, status: item.status })),
     ...fiberSpans.map((item) => ({ id: item.id, kind: "fiber-spans", label: `${item.code} ${item.aSite}-${item.zSite}`, status: item.status })),
@@ -2189,6 +2201,28 @@ function DatacenterView({
       });
     }
   }, [selectedPatchcord]);
+
+  useEffect(() => {
+    const currentAssetExists = assets.some((asset) => asset.id === selectedDatacenterAssetId);
+    if (!currentAssetExists) {
+      setSelectedDatacenterAssetId(assets[0]?.id ?? "");
+    }
+  }, [assets, selectedDatacenterAssetId]);
+
+  useEffect(() => {
+    if (selectedDatacenterAsset) {
+      setAssetEditForm({
+        siteCode: selectedDatacenterAsset.siteCode,
+        rackCode: selectedDatacenterAsset.rackCode ?? "",
+        name: selectedDatacenterAsset.name,
+        assetType: selectedDatacenterAsset.assetType,
+        units: selectedDatacenterAsset.units ? String(selectedDatacenterAsset.units) : "",
+        ports: selectedDatacenterAsset.ports ? String(selectedDatacenterAsset.ports) : "",
+        status: selectedDatacenterAsset.status,
+        notes: selectedDatacenterAsset.notes ?? ""
+      });
+    }
+  }, [selectedDatacenterAsset]);
 
   async function savePhysical(event: FormEvent<HTMLFormElement>, path: string, payload: Record<string, unknown>, reset: () => void) {
     event.preventDefault();
@@ -2350,6 +2384,30 @@ function DatacenterView({
         color: patchEditForm.color || null,
         status: patchEditForm.status,
         reason: "Edicion de patchcord desde Datacenter"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateDatacenterAsset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedDatacenterAsset) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/physical/datacenter-assets/${selectedDatacenterAsset.id}`, {
+        siteCode: assetEditForm.siteCode,
+        rackCode: assetEditForm.rackCode || null,
+        name: assetEditForm.name,
+        assetType: assetEditForm.assetType,
+        units: num(assetEditForm.units),
+        ports: num(assetEditForm.ports),
+        status: assetEditForm.status,
+        notes: assetEditForm.notes || null,
+        reason: "Edicion de activo datacenter desde Datacenter"
       });
       await onReload();
       setFormState("saved");
@@ -2676,6 +2734,28 @@ function DatacenterView({
             <label className="wideField">Notas<input onChange={(event) => setAssetForm((current) => ({ ...current, notes: event.target.value }))} value={assetForm.notes} /></label>
             <button disabled={!assetForm.siteCode || !assetForm.name} type="submit">Guardar activo</button>
           </form>
+          {selectedDatacenterAsset && (
+            <form className="quickForm" onSubmit={updateDatacenterAsset}>
+              <p className="eyebrow">Editar activo</p>
+              <label className="wideField">Activo<select onChange={(event) => setSelectedDatacenterAssetId(event.target.value)} value={selectedDatacenterAssetId}>
+                {assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.siteCode} - {asset.name}</option>)}
+              </select></label>
+              <label>Sede<input onChange={(event) => setAssetEditForm((current) => ({ ...current, siteCode: event.target.value.toUpperCase() }))} value={assetEditForm.siteCode} /></label>
+              <label>Rack<input onChange={(event) => setAssetEditForm((current) => ({ ...current, rackCode: event.target.value.toUpperCase() }))} value={assetEditForm.rackCode} /></label>
+              <label className="wideField">Nombre<input onChange={(event) => setAssetEditForm((current) => ({ ...current, name: event.target.value }))} value={assetEditForm.name} /></label>
+              <label>Tipo<input onChange={(event) => setAssetEditForm((current) => ({ ...current, assetType: event.target.value }))} value={assetEditForm.assetType} /></label>
+              <label>RU<input inputMode="numeric" onChange={(event) => setAssetEditForm((current) => ({ ...current, units: event.target.value }))} value={assetEditForm.units} /></label>
+              <label>Puertos<input inputMode="numeric" onChange={(event) => setAssetEditForm((current) => ({ ...current, ports: event.target.value }))} value={assetEditForm.ports} /></label>
+              <label>Estado<select onChange={(event) => setAssetEditForm((current) => ({ ...current, status: event.target.value }))} value={assetEditForm.status}>
+                <option value="active">active</option>
+                <option value="planned">planned</option>
+                <option value="degraded">degraded</option>
+                <option value="retired">retired</option>
+              </select></label>
+              <label className="wideField">Notas<input onChange={(event) => setAssetEditForm((current) => ({ ...current, notes: event.target.value }))} value={assetEditForm.notes} /></label>
+              <button disabled={!assetEditForm.siteCode || !assetEditForm.name} type="submit">Guardar activo</button>
+            </form>
+          )}
         </div>
         <div className="panel physicalOpsPanel">
           <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Editar estado / eliminar</h2></div></div>
