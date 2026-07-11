@@ -23,6 +23,10 @@ export type CreateBackupInput = {
   source: string;
 };
 
+export type UpdateBackupInput = Partial<CreateBackupInput> & {
+  id: string;
+};
+
 function mapBackup(row: BackupRow) {
   return {
     id: row.id,
@@ -115,6 +119,47 @@ export async function getBackupFromDb(id: string) {
      JOIN sites s ON s.id = d.site_id
      WHERE cb.id::text = $1`,
     [id]
+  );
+
+  return row ? mapBackup(row) : null;
+}
+
+export async function updateBackupInDb(input: UpdateBackupInput) {
+  const hasDeviceName = Object.hasOwn(input, "deviceName");
+  const hasStorageKey = Object.hasOwn(input, "storageKey");
+  const hasConfigHash = Object.hasOwn(input, "configHash");
+  const hasSource = Object.hasOwn(input, "source");
+  const row = await queryOne<BackupRow>(
+    `WITH selected_device AS (
+       SELECT id, name FROM devices WHERE name = $2
+     )
+     UPDATE config_backups cb
+     SET
+       device_id = CASE WHEN $6 THEN (SELECT id FROM selected_device) ELSE cb.device_id END,
+       storage_key = CASE WHEN $7 THEN $3 ELSE cb.storage_key END,
+       config_hash = CASE WHEN $8 THEN $4 ELSE cb.config_hash END,
+       source = CASE WHEN $9 THEN $5 ELSE cb.source END
+     WHERE cb.id::text = $1
+       AND (NOT $6 OR EXISTS (SELECT 1 FROM selected_device))
+     RETURNING
+       cb.id,
+       (SELECT d.name FROM devices d WHERE d.id = cb.device_id) AS device,
+       (SELECT s.code FROM devices d JOIN sites s ON s.id = d.site_id WHERE d.id = cb.device_id) AS site_code,
+       cb.storage_key,
+       cb.config_hash,
+       cb.collected_at::text,
+       cb.source`,
+    [
+      input.id,
+      input.deviceName ?? null,
+      input.storageKey ?? null,
+      input.configHash ?? null,
+      input.source ?? null,
+      hasDeviceName,
+      hasStorageKey,
+      hasConfigHash,
+      hasSource
+    ]
   );
 
   return row ? mapBackup(row) : null;

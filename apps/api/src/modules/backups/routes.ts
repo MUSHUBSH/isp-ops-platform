@@ -3,13 +3,17 @@ import { z } from "zod";
 import { recordAuditEvent } from "../../shared/audit-service.js";
 import { actorId, requirePermission } from "../../shared/auth.js";
 import { configBackups } from "../../shared/demo-data.js";
-import { createBackupInDb, deleteBackupInDb, getBackupFromDb, getBackupSummaryFromDb, listBackupsFromDb } from "./repository.js";
+import { createBackupInDb, deleteBackupInDb, getBackupFromDb, getBackupSummaryFromDb, listBackupsFromDb, updateBackupInDb } from "./repository.js";
 
 const createBackupSchema = z.object({
   deviceName: z.string().min(2).max(100),
   storageKey: z.string().min(3).max(500),
   configHash: z.string().min(3).max(160),
   source: z.string().min(2).max(80),
+  reason: z.string().max(500).nullable().optional()
+});
+
+const updateBackupSchema = createBackupSchema.partial().omit({ reason: true }).extend({
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -55,6 +59,34 @@ export async function registerBackupRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ backup });
+  });
+
+  app.patch("/backups/:id", { preHandler: requirePermission("backups.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateBackupSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid backup payload", issues: parsed.error.issues });
+    }
+
+    const before = await getBackupFromDb(id);
+    const backup = await updateBackupInDb({ id, ...parsed.data });
+
+    if (!backup) {
+      return reply.code(409).send({ message: "Backup not found, device invalid, or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "config_backup.updated",
+      objectType: "config_backup",
+      objectId: backup.id,
+      beforeData: before,
+      afterData: backup,
+      reason: parsed.data.reason ?? "Actualizacion de backup de configuracion"
+    });
+
+    return { backup };
   });
 
   app.delete("/backups/:id", { preHandler: requirePermission("backups.write") }, async (request, reply) => {

@@ -5523,8 +5523,25 @@ function BackupsView({
   });
   const [selectedBackupId, setSelectedBackupId] = useState(backups[0]?.id ?? "");
   const selectedBackup = backups.find((backup) => backup.id === selectedBackupId);
+  const [backupEditForm, setBackupEditForm] = useState({
+    deviceName: backups[0]?.device ?? devices[0]?.name ?? "",
+    storageKey: backups[0]?.storageKey ?? "",
+    configHash: backups[0]?.configHash ?? "",
+    source: backups[0]?.source ?? "manual"
+  });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const coverage = summary.totalDevices > 0 ? Math.round((summary.devicesWithBackup / summary.totalDevices) * 100) : 0;
+
+  useEffect(() => {
+    if (selectedBackup) {
+      setBackupEditForm({
+        deviceName: selectedBackup.device,
+        storageKey: selectedBackup.storageKey,
+        configHash: selectedBackup.configHash,
+        source: selectedBackup.source
+      });
+    }
+  }, [selectedBackup]);
 
   async function createBackup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5560,6 +5577,26 @@ function BackupsView({
     }
   }
 
+  async function updateBackup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedBackup) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/backups/${selectedBackup.id}`, {
+        deviceName: backupEditForm.deviceName,
+        storageKey: backupEditForm.storageKey,
+        configHash: backupEditForm.configHash,
+        source: backupEditForm.source,
+        reason: "Edicion desde modulo Backups"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
   return (
     <ModulePage eyebrow="Backups" title="Respaldo de configuraciones y evidencia de cambio">
       <section className="metricGrid compactMetrics">
@@ -5585,15 +5622,21 @@ function BackupsView({
           </form>
         </div>
         <div className="panel">
-          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Retiro de registro</h2></div></div>
-          <form className="quickForm" onSubmit={(event) => event.preventDefault()}>
+          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Editar o retirar backup</h2></div></div>
+          <form className="quickForm" onSubmit={updateBackup}>
             <label className="wideField">Backup<select onChange={(event) => setSelectedBackupId(event.target.value)} value={selectedBackupId}>
               <option value="">Seleccionar</option>
               {backups.map((backup) => <option key={backup.id} value={backup.id}>{backup.device} - {new Date(backup.collectedAt).toLocaleString()}</option>)}
             </select></label>
-            <label>Equipo<input disabled value={selectedBackup?.device ?? ""} /></label>
-            <label>Origen<input disabled value={selectedBackup?.source ?? ""} /></label>
-            <label className="wideField">Storage<input disabled value={selectedBackup?.storageKey ?? ""} /></label>
+            <label className="wideField">Equipo<select disabled={!selectedBackup} onChange={(event) => setBackupEditForm((current) => ({ ...current, deviceName: event.target.value }))} value={backupEditForm.deviceName}>
+              {devices.map((device) => <option key={device.id} value={device.name}>{device.name} - {device.siteCode}</option>)}
+            </select></label>
+            <label>Origen<select disabled={!selectedBackup} onChange={(event) => setBackupEditForm((current) => ({ ...current, source: event.target.value }))} value={backupEditForm.source}>
+              <option value="manual">manual</option><option value="oxidized">oxidized</option><option value="rancid">rancid</option><option value="mikrotik-api">mikrotik-api</option><option value="script">script</option>
+            </select></label>
+            <label>Hash<input disabled={!selectedBackup} onChange={(event) => setBackupEditForm((current) => ({ ...current, configHash: event.target.value }))} value={backupEditForm.configHash} /></label>
+            <label className="wideField">Storage<input disabled={!selectedBackup} onChange={(event) => setBackupEditForm((current) => ({ ...current, storageKey: event.target.value }))} value={backupEditForm.storageKey} /></label>
+            <button disabled={!selectedBackup || !backupEditForm.deviceName || !backupEditForm.storageKey || !backupEditForm.configHash} type="submit">Guardar backup</button>
             <button className="dangerButton" disabled={!selectedBackup} onClick={() => void deleteBackup()} type="button">Eliminar registro</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
           </form>
