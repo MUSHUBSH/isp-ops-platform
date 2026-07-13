@@ -5130,6 +5130,13 @@ function IncidentsView({
     incidentCode: incidents[0]?.code ?? "",
     status: incidents[0]?.status ?? "investigating"
   });
+  const [incidentEditForm, setIncidentEditForm] = useState({
+    title: incidents[0]?.title ?? "",
+    severity: incidents[0]?.severity ?? "major",
+    status: incidents[0]?.status ?? "open",
+    ownerTeam: incidents[0]?.ownerTeam ?? "noc",
+    summary: incidents[0]?.summary ?? ""
+  });
   const [eventMessage, setEventMessage] = useState("");
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const active = incidents.filter((incident) => !["resolved", "closed"].includes(incident.status)).length;
@@ -5157,8 +5164,15 @@ function IncidentsView({
   useEffect(() => {
     if (selectedIncident) {
       setOperationForm({ incidentCode: selectedIncident.code, status: selectedIncident.status });
+      setIncidentEditForm({
+        title: selectedIncident.title,
+        severity: selectedIncident.severity,
+        status: selectedIncident.status,
+        ownerTeam: selectedIncident.ownerTeam ?? "noc",
+        summary: selectedIncident.summary ?? ""
+      });
     }
-  }, [selectedIncident?.code, selectedIncident?.status]);
+  }, [selectedIncident?.code, selectedIncident?.ownerTeam, selectedIncident?.severity, selectedIncident?.status, selectedIncident?.summary, selectedIncident?.title]);
 
   async function submitIncident(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5244,6 +5258,33 @@ function IncidentsView({
       });
       await onReload();
       const refreshed = await apiGet<IncidentDetail>(`/incidents/${selectedOperationIncident.code}`);
+      setDetail(refreshed);
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateIncident(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedIncident) {
+      return;
+    }
+
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/incidents/${selectedIncident.code}`, {
+        title: incidentEditForm.title,
+        severity: incidentEditForm.severity,
+        status: incidentEditForm.status,
+        ownerTeam: incidentEditForm.ownerTeam || null,
+        summary: incidentEditForm.summary || null,
+        reason: "Edicion desde modulo Incidencias"
+      });
+      await onReload();
+      const refreshed = await apiGet<IncidentDetail>(`/incidents/${selectedIncident.code}`);
       setDetail(refreshed);
       setFormState("saved");
     } catch {
@@ -5359,6 +5400,24 @@ function IncidentsView({
                 <div><span>Inicio</span><strong>{new Date(selectedIncident.startedAt).toLocaleString()}</strong></div>
               </div>
               {selectedIncident.summary && <p className="incidentSummary">{selectedIncident.summary}</p>}
+              <form className="quickForm incidentEditForm" onSubmit={updateIncident}>
+                <label className="wideField">Titulo<input onChange={(event) => setIncidentEditForm((current) => ({ ...current, title: event.target.value }))} value={incidentEditForm.title} /></label>
+                <label>Severidad<select onChange={(event) => setIncidentEditForm((current) => ({ ...current, severity: event.target.value }))} value={incidentEditForm.severity}>
+                  <option value="critical">critical</option>
+                  <option value="major">major</option>
+                  <option value="minor">minor</option>
+                </select></label>
+                <label>Estado<select onChange={(event) => setIncidentEditForm((current) => ({ ...current, status: event.target.value }))} value={incidentEditForm.status}>
+                  <option value="open">open</option>
+                  <option value="investigating">investigating</option>
+                  <option value="monitoring">monitoring</option>
+                  <option value="resolved">resolved</option>
+                  <option value="closed">closed</option>
+                </select></label>
+                <label>Equipo<input onChange={(event) => setIncidentEditForm((current) => ({ ...current, ownerTeam: event.target.value }))} value={incidentEditForm.ownerTeam} /></label>
+                <label className="wideField">Resumen<textarea onChange={(event) => setIncidentEditForm((current) => ({ ...current, summary: event.target.value }))} value={incidentEditForm.summary} /></label>
+                <button disabled={!incidentEditForm.title} type="submit">Guardar incidencia</button>
+              </form>
               <div className="incidentOps">
                 <label>
                   Estado

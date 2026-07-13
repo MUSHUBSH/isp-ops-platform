@@ -1482,6 +1482,16 @@ h2 {
   padding: 12px 0;
 }
 
+.incidentEditForm {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.incidentEditForm textarea {
+  min-height: 78px;
+}
+
 .incidentOps label {
   display: grid;
   gap: 5px;

@@ -46,6 +46,16 @@ export type CreateIncidentInput = {
   }>;
 };
 
+export type UpdateIncidentInput = {
+  code: string;
+  title?: string;
+  severity?: string;
+  status?: string;
+  ownerTeam?: string | null;
+  summary?: string | null;
+  updatedBy?: string | null;
+};
+
 function mapIncident(row: IncidentRow) {
   return {
     id: row.id,
@@ -207,6 +217,50 @@ export async function addIncidentEventInDb(code: string, eventType: string, mess
     createdAt: row.created_at,
     createdBy: row.created_by
   } : null;
+}
+
+export async function updateIncidentInDb(input: UpdateIncidentInput) {
+  const incident = await queryOne<IncidentRow>(
+    `UPDATE incidents
+     SET
+       title = CASE WHEN $2::boolean THEN $3 ELSE title END,
+       severity = CASE WHEN $4::boolean THEN $5 ELSE severity END,
+       status = CASE WHEN $6::boolean THEN $7 ELSE status END,
+       owner_team = CASE WHEN $8::boolean THEN $9 ELSE owner_team END,
+       summary = CASE WHEN $10::boolean THEN $11 ELSE summary END,
+       resolved_at = CASE
+         WHEN $6::boolean AND $7 IN ('resolved', 'closed') THEN COALESCE(resolved_at, now())
+         WHEN $6::boolean THEN NULL
+         ELSE resolved_at
+       END
+     WHERE code = $1 OR id::text = $1
+     RETURNING id, code, title, severity, status, started_at, resolved_at, owner_team, summary, 0 AS impact_count, 0 AS event_count`,
+    [
+      input.code,
+      Object.hasOwn(input, "title"),
+      input.title ?? null,
+      Object.hasOwn(input, "severity"),
+      input.severity ?? null,
+      Object.hasOwn(input, "status"),
+      input.status ?? null,
+      Object.hasOwn(input, "ownerTeam"),
+      input.ownerTeam ?? null,
+      Object.hasOwn(input, "summary"),
+      input.summary ?? null
+    ]
+  );
+
+  if (!incident) {
+    return null;
+  }
+
+  await query(
+    `INSERT INTO incident_events (incident_id, event_type, message, created_by)
+     VALUES ($1, 'edited', 'Incidencia editada desde consola NOC', $2)`,
+    [incident.id, input.updatedBy ?? null]
+  );
+
+  return mapIncident(incident);
 }
 
 export async function updateIncidentStatusInDb(code: string, status: string, createdBy?: string | null) {
