@@ -179,7 +179,12 @@ export function App() {
           </div>
           <div className="topbarActions">
             <span className={`apiState ${data.apiState}`}>{data.apiState === "live" ? "API live" : "demo local"}</span>
-            {data.currentUser && <span className="apiState live">{data.currentUser.displayName}</span>}
+            {data.currentUser && (
+              <span className="identityBadge" title={data.currentUser.permissions.join(", ")}>
+                <strong>{data.currentUser.displayName}</strong>
+                <small>{data.currentUser.roles.join(" / ") || "sin rol"} - {data.currentUser.permissions.length} permisos</small>
+              </span>
+            )}
             <button className="themeToggle">Claro / oscuro</button>
           </div>
         </header>

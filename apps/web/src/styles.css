@@ -191,6 +191,33 @@ select {
   color: var(--accent);
 }
 
+.identityBadge {
+  display: grid;
+  gap: 2px;
+  min-width: 150px;
+  max-width: 240px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.identityBadge strong,
+.identityBadge small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identityBadge strong {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.identityBadge small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .search input {
   width: 100%;
   border: 0;
@@ -2049,6 +2076,12 @@ h2 {
 
   .apiState {
     max-width: 100%;
+  }
+
+  .identityBadge {
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
   }
 
   .networkMapPanel {
