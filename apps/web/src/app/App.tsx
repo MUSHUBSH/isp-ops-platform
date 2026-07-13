@@ -110,19 +110,20 @@ export function App() {
     }
 
     const index = [
-      ...data.sites.map((item) => ({ type: "Sede", label: item.code, context: item.name })),
-      ...data.providers.map((item) => ({ type: "Proveedor", label: item.name, context: item.nocEmail })),
-      ...data.devices.map((item) => ({ type: "Equipo", label: item.name, context: `${item.role} - ${item.siteCode}` })),
-      ...data.interfaces.map((item) => ({ type: "Interfaz", label: `${item.device} ${item.name}`, context: `${item.type} - ${item.status}` })),
-      ...data.documents.map((item) => ({ type: "Documento", label: item.title, context: `${item.objectType} - ${item.createdBy}` })),
-      ...data.evidence.map((item) => ({ type: "Evidencia", label: item.filename, context: `${item.objectType} - ${item.contentType ?? "archivo"}` })),
-      ...data.prefixes.map((item) => ({ type: "Prefijo", label: item.prefix, context: `${item.role} - ${item.siteCode}` })),
+      ...data.sites.map((item) => ({ type: "Sede", label: item.code, context: item.name, module: "sites" as ModuleKey })),
+      ...data.providers.map((item) => ({ type: "Proveedor", label: item.name, context: item.nocEmail, module: "providers" as ModuleKey })),
+      ...data.devices.map((item) => ({ type: "Equipo", label: item.name, context: `${item.role} - ${item.siteCode}`, module: "devices" as ModuleKey })),
+      ...data.interfaces.map((item) => ({ type: "Interfaz", label: `${item.device} ${item.name}`, context: `${item.type} - ${item.status}`, module: "interfaces" as ModuleKey })),
+      ...data.documents.map((item) => ({ type: "Documento", label: item.title, context: `${item.objectType} - ${item.createdBy}`, module: "docs" as ModuleKey })),
+      ...data.evidence.map((item) => ({ type: "Evidencia", label: item.filename, context: `${item.objectType} - ${item.contentType ?? "archivo"}`, module: "docs" as ModuleKey })),
+      ...data.prefixes.map((item) => ({ type: "Prefijo", label: item.prefix, context: `${item.role} - ${item.siteCode}`, module: "ipam" as ModuleKey })),
       ...data.ips.map((item) => ({
         type: "IP",
         label: item.address,
-        context: `${item.device ?? "sin equipo"} - ${item.interface ?? "sin interfaz"}`
+        context: `${item.device ?? "sin equipo"} - ${item.interface ?? "sin interfaz"}`,
+        module: "ipam" as ModuleKey
       })),
-      ...data.circuits.map((item) => ({ type: "Circuito", label: item.code, context: `${item.aSite} <> ${item.zSite}` }))
+      ...data.circuits.map((item) => ({ type: "Circuito", label: item.code, context: `${item.aSite} <> ${item.zSite}`, module: "circuits" as ModuleKey }))
     ];
 
     return index
@@ -168,7 +169,10 @@ export function App() {
             {searchResults.length > 0 && (
               <div className="searchResults">
                 {searchResults.map((item) => (
-                  <button key={`${item.type}-${item.label}`}>
+                  <button key={`${item.type}-${item.label}`} onClick={() => {
+                    setActiveModule(item.module);
+                    setQuery("");
+                  }}>
                     <span>{item.type}</span>
                     <strong>{item.label}</strong>
                     <small>{item.context}</small>
