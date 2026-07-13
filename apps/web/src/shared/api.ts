@@ -100,6 +100,8 @@ export type SiteMap = {
     type: string;
     capacityMbps: number | null;
     label: string;
+    providerCode: string | null;
+    circuitCode: string | null;
   }>;
 };
 

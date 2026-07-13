@@ -51,6 +51,8 @@ type SiteTransportLinkRow = {
   link_type: string;
   capacity_mbps: number | null;
   label: string | null;
+  provider_code: string | null;
+  circuit_code: string | null;
 };
 
 type SiteMapLinkRow = {
@@ -61,6 +63,8 @@ type SiteMapLinkRow = {
   link_type: string;
   capacity_mbps: number | null;
   label: string | null;
+  provider_code: string | null;
+  circuit_code: string | null;
 };
 
 export type CreateSiteInput = {
@@ -156,7 +160,9 @@ function mapTransportLink(row: SiteTransportLinkRow) {
     status: row.status,
     type: row.link_type,
     capacityMbps: row.capacity_mbps,
-    label: row.label ?? `${row.a} <> ${row.z}`
+    label: row.label ?? `${row.a} <> ${row.z}`,
+    providerCode: row.provider_code,
+    circuitCode: row.circuit_code
   };
 }
 
@@ -260,10 +266,14 @@ export async function getSiteMapFromDb() {
        stl.status,
        stl.link_type,
        stl.capacity_mbps,
-       stl.label
+       stl.label,
+       p.code AS provider_code,
+       c.code AS circuit_code
      FROM site_transport_links stl
      JOIN sites a ON a.id = stl.a_site_id
      JOIN sites z ON z.id = stl.z_site_id
+     LEFT JOIN providers p ON p.id = stl.provider_id
+     LEFT JOIN circuits c ON c.id = stl.circuit_id
      ORDER BY a.code, z.code`
   );
 
@@ -276,7 +286,9 @@ export async function getSiteMapFromDb() {
       status: link.status,
       type: link.link_type,
       capacityMbps: link.capacity_mbps,
-      label: link.label ?? `${link.a} <> ${link.z}`
+      label: link.label ?? `${link.a} <> ${link.z}`,
+      providerCode: link.provider_code,
+      circuitCode: link.circuit_code
     }))
   };
 }
@@ -494,7 +506,9 @@ export async function createSiteTransportLinkInDb(input: CreateSiteTransportLink
        status,
        link_type,
        capacity_mbps,
-       label`,
+       label,
+       (SELECT code FROM providers WHERE id = provider_id) AS provider_code,
+       (SELECT code FROM circuits WHERE id = circuit_id) AS circuit_code`,
     [
       input.aSiteCode,
       input.zSiteCode,
@@ -519,10 +533,14 @@ export async function getSiteTransportLinkFromDb(id: string) {
        stl.status,
        stl.link_type,
        stl.capacity_mbps,
-       stl.label
+       stl.label,
+       p.code AS provider_code,
+       c.code AS circuit_code
      FROM site_transport_links stl
      JOIN sites a ON a.id = stl.a_site_id
      JOIN sites z ON z.id = stl.z_site_id
+     LEFT JOIN providers p ON p.id = stl.provider_id
+     LEFT JOIN circuits c ON c.id = stl.circuit_id
      WHERE stl.id::text = $1`,
     [id]
   );
@@ -541,8 +559,7 @@ export async function updateSiteTransportLinkInDb(input: UpdateSiteTransportLink
        link_type = $5,
        status = $6,
        capacity_mbps = $7,
-       label = $8,
-       updated_at = now()
+       label = $8
      FROM sites a
      JOIN sites z ON z.code = $3
      LEFT JOIN providers p ON p.code = $4
@@ -556,7 +573,9 @@ export async function updateSiteTransportLinkInDb(input: UpdateSiteTransportLink
        stl.status,
        stl.link_type,
        stl.capacity_mbps,
-       stl.label`,
+       stl.label,
+       (SELECT code FROM providers WHERE id = stl.provider_id) AS provider_code,
+       (SELECT code FROM circuits WHERE id = stl.circuit_id) AS circuit_code`,
     [
       input.id,
       input.aSiteCode,

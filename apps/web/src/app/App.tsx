@@ -1408,7 +1408,7 @@ function SitesView({
                 {selectedMapLinks.slice(0, 6).map((link) => (
                   <article key={link.id}>
                     <strong>{link.label}</strong>
-                    <span>{link.a} - {link.z} / {link.capacityMbps ? formatMbps(link.capacityMbps) : "sin capacidad"} / {link.status}</span>
+                    <span>{link.a} - {link.z} / {link.capacityMbps ? formatMbps(link.capacityMbps) : "sin capacidad"} / {link.providerCode ?? "sin proveedor"} / {link.circuitCode ?? "sin circuito"}</span>
                   </article>
                 ))}
                 {selectedFiberSpans.length === 0 && selectedMapLinks.length === 0 && <span className="mutedText">Sin tramos asociados</span>}
@@ -1797,7 +1797,7 @@ function NetworkMapView({ siteMap }: { siteMap: SiteMap }) {
               <article className={`routeItem ${link.id === selectedLinkId ? "selected" : ""}`} key={link.id} onClick={() => setSelectedLinkId(link.id)}>
                 <div>
                   <strong>{link.label}</strong>
-                  <span>{link.type} - {formatCapacity(link.capacityMbps)}</span>
+                  <span>{link.type} - {formatCapacity(link.capacityMbps)} - {link.providerCode ?? "sin proveedor"} - {link.circuitCode ?? "sin circuito"}</span>
                 </div>
                 <small className={`statusText ${link.status}`}>{link.status}</small>
               </article>
