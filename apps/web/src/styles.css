@@ -1318,6 +1318,36 @@ h2 {
   min-width: 0;
 }
 
+.ipTracePanel {
+  grid-column: 1 / -1;
+}
+
+.traceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.traceGrid div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.traceGrid span {
+  color: var(--text-muted);
+  display: block;
+  font-size: 11px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.traceGrid strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
 .deviceWorkbenchGrid {
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(280px, 1fr) minmax(280px, 1fr);

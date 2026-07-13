@@ -187,7 +187,7 @@ export function App() {
         {activeModule === "noc" && <NocView data={data} />}
         {activeModule === "providers" && <ProvidersView contracts={data.providerContracts} onReload={data.reload} providers={data.providers} />}
         {activeModule === "resources" && <ResourcesView onReload={data.reload} prefixes={data.prefixes} sites={data.sites} />}
-        {activeModule === "ipam" && <IpamView interfaces={data.interfaces} ips={data.ips} onReload={data.reload} prefixes={data.prefixes} />}
+        {activeModule === "ipam" && <IpamView circuits={data.circuits} interfaceLinks={data.interfaceLinks} interfaces={data.interfaces} ips={data.ips} onReload={data.reload} prefixes={data.prefixes} />}
         {activeModule === "sites" && (
           <SitesView
             circuits={data.circuits}
@@ -833,11 +833,32 @@ function ResourcesView({ onReload, prefixes, sites }: { onReload: () => Promise<
   );
 }
 
-function IpamView({ interfaces, ips, onReload, prefixes }: { interfaces: NetworkInterface[]; ips: IpAssignment[]; onReload: () => Promise<void>; prefixes: Prefix[] }) {
+function IpamView({
+  circuits,
+  interfaceLinks,
+  interfaces,
+  ips,
+  onReload,
+  prefixes
+}: {
+  circuits: Circuit[];
+  interfaceLinks: InterfaceLink[];
+  interfaces: NetworkInterface[];
+  ips: IpAssignment[];
+  onReload: () => Promise<void>;
+  prefixes: Prefix[];
+}) {
   const [ipForm, setIpForm] = useState({ address: "", prefix: prefixes[0]?.prefix ?? "", interfaceId: interfaces[0]?.id ?? "", role: "management", status: "assigned", description: "" });
   const [selectedIpId, setSelectedIpId] = useState(ips[0]?.id ?? "");
   const selectedIp = ips.find((ip) => ip.id === selectedIpId) ?? ips[0];
   const selectedIpInterfaceId = selectedIp ? interfaces.find((item) => item.device === selectedIp.device && item.name === selectedIp.interface)?.id ?? "" : "";
+  const selectedIpInterface = interfaces.find((item) => item.id === selectedIpInterfaceId);
+  const selectedIpPrefix = selectedIp ? prefixes.find((prefix) => prefix.prefix === selectedIp.prefix) : undefined;
+  const selectedInterfaceLinks = selectedIpInterface
+    ? interfaceLinks.filter((link) => link.aInterfaceId === selectedIpInterface.id || link.bInterfaceId === selectedIpInterface.id)
+    : [];
+  const selectedCircuitCodes = Array.from(new Set(selectedInterfaceLinks.map((link) => link.circuitCode).filter((code): code is string => Boolean(code))));
+  const selectedIpCircuits = circuits.filter((circuit) => selectedCircuitCodes.includes(circuit.code));
   const [ipEditForm, setIpEditForm] = useState({ interfaceId: selectedIpInterfaceId, role: selectedIp?.role ?? "management", status: selectedIp?.status ?? "assigned", description: selectedIp?.description ?? "" });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
@@ -1015,6 +1036,46 @@ function IpamView({ interfaces, ips, onReload, prefixes }: { interfaces: Network
             <button className="dangerButton" disabled={!selectedIp} onClick={() => void deleteIp()} type="button">Eliminar IP</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
           </form>
+        </div>
+        <div className="panel ipTracePanel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">Trazabilidad</p>
+              <h2>Contexto de IP</h2>
+            </div>
+          </div>
+          {selectedIp ? (
+            <div className="traceGrid">
+              <div><span>Direccion</span><strong>{selectedIp.address}</strong></div>
+              <div><span>Prefijo</span><strong>{selectedIp.prefix}</strong></div>
+              <div><span>Sede</span><strong>{selectedIp.site}</strong></div>
+              <div><span>Equipo</span><strong>{selectedIp.device ?? "sin equipo"}</strong></div>
+              <div><span>Interfaz</span><strong>{selectedIp.interface ?? "sin interfaz"}</strong></div>
+              <div><span>Velocidad</span><strong>{selectedIpInterface?.speedMbps ? formatMbps(selectedIpInterface.speedMbps) : "N/D"}</strong></div>
+              <div><span>Rol</span><strong>{selectedIp.role}</strong></div>
+              <div><span>Estado</span><strong className={`statusText ${selectedIp.status}`}>{selectedIp.status}</strong></div>
+              <div><span>VRF</span><strong>{selectedIpPrefix?.vrf ?? "global"}</strong></div>
+              <div><span>Uso prefijo</span><strong>{selectedIpPrefix ? `${selectedIpPrefix.utilization}%` : "N/D"}</strong></div>
+            </div>
+          ) : (
+            <span className="mutedText">Selecciona una IP para ver su trazabilidad completa.</span>
+          )}
+          <div className="compactList">
+            <p className="eyebrow">Enlaces y circuitos relacionados</p>
+            {selectedInterfaceLinks.map((link) => (
+              <article key={link.id}>
+                <strong>{link.aDevice} - {link.bDevice}</strong>
+                <span>{link.linkType} / {link.status} / {link.capacityMbps ? formatMbps(link.capacityMbps) : "sin capacidad"}</span>
+              </article>
+            ))}
+            {selectedIpCircuits.map((circuit) => (
+              <article key={circuit.id}>
+                <strong>{circuit.code} - {circuit.name}</strong>
+                <span>{circuit.providerCode} / {circuit.aSite} - {circuit.zSite} / {formatMbps(circuit.capacityMbps)}</span>
+              </article>
+            ))}
+            {selectedInterfaceLinks.length === 0 && selectedIpCircuits.length === 0 && <span className="mutedText">Sin enlaces puerto-a-puerto o circuitos asociados.</span>}
+          </div>
         </div>
       </section>
     </ModulePage>
