@@ -7,14 +7,17 @@ import {
   createSiteInDb,
   createSiteTransportLinkInDb,
   deleteSiteInDb,
+  deleteSiteTransportLinkInDb,
   getSiteByCodeFromDb,
   getSiteDownstreamImpactFromDb,
   getSiteLocationFromDb,
   getSiteMapFromDb,
+  getSiteTransportLinkFromDb,
   listSiteCodesFromDb,
   listSitesFromDb,
   updateSiteInDb,
   updateSiteLocationInDb,
+  updateSiteTransportLinkInDb,
   upsertSiteInDb
 } from "./repository.js";
 
@@ -59,6 +62,11 @@ const transportLinkBaseSchema = z.object({
 });
 
 const createTransportLinkSchema = transportLinkBaseSchema.refine((value) => value.aSiteCode !== value.zSiteCode, {
+  message: "aSiteCode and zSiteCode must be different",
+  path: ["zSiteCode"]
+});
+
+const updateTransportLinkSchema = transportLinkBaseSchema.refine((value) => value.aSiteCode !== value.zSiteCode, {
   message: "aSiteCode and zSiteCode must be different",
   path: ["zSiteCode"]
 });
@@ -341,5 +349,62 @@ export async function registerSiteRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ link });
+  });
+
+  app.patch("/sites/transport-links/:id", { preHandler: requirePermission("sites.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateTransportLinkSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid transport link payload", issues: parsed.error.issues });
+    }
+
+    const before = await getSiteTransportLinkFromDb(id);
+    const link = await updateSiteTransportLinkInDb({
+      id,
+      ...parsed.data
+    });
+
+    if (!link) {
+      return reply.code(404).send({ message: "Transport link not found, sites not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "site_transport_link.updated",
+      objectType: "site_transport_link",
+      objectId: link.id,
+      beforeData: before,
+      afterData: link,
+      reason: parsed.data.reason ?? "Actualizacion de transporte site-to-site"
+    });
+
+    return { link };
+  });
+
+  app.delete("/sites/transport-links/:id", { preHandler: requirePermission("sites.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const before = await getSiteTransportLinkFromDb(id);
+
+    if (!before) {
+      return reply.code(404).send({ message: "Transport link not found" });
+    }
+
+    const deleted = await deleteSiteTransportLinkInDb(id);
+
+    if (!deleted) {
+      return reply.code(404).send({ message: "Transport link not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "site_transport_link.deleted",
+      objectType: "site_transport_link",
+      objectId: deleted.id,
+      beforeData: before,
+      reason: "Eliminacion controlada de tramo site-to-site"
+    });
+
+    return { deleted };
   });
 }

@@ -103,6 +103,10 @@ export type CreateSiteTransportLinkInput = {
   label?: string | null;
 };
 
+export type UpdateSiteTransportLinkInput = CreateSiteTransportLinkInput & {
+  id: string;
+};
+
 function normalizeStatus(status: string) {
   if (status === "active") {
     return "healthy";
@@ -504,6 +508,78 @@ export async function createSiteTransportLinkInDb(input: CreateSiteTransportLink
   );
 
   return row ? mapTransportLink(row) : null;
+}
+
+export async function getSiteTransportLinkFromDb(id: string) {
+  const row = await queryOne<SiteTransportLinkRow>(
+    `SELECT
+       stl.id,
+       a.code AS a,
+       z.code AS z,
+       stl.status,
+       stl.link_type,
+       stl.capacity_mbps,
+       stl.label
+     FROM site_transport_links stl
+     JOIN sites a ON a.id = stl.a_site_id
+     JOIN sites z ON z.id = stl.z_site_id
+     WHERE stl.id::text = $1`,
+    [id]
+  );
+
+  return row ? mapTransportLink(row) : null;
+}
+
+export async function updateSiteTransportLinkInDb(input: UpdateSiteTransportLinkInput) {
+  const row = await queryOne<SiteTransportLinkRow>(
+    `UPDATE site_transport_links stl
+     SET
+       a_site_id = a.id,
+       z_site_id = z.id,
+       provider_id = p.id,
+       circuit_id = c.id,
+       link_type = $5,
+       status = $6,
+       capacity_mbps = $7,
+       label = $8,
+       updated_at = now()
+     FROM sites a
+     JOIN sites z ON z.code = $3
+     LEFT JOIN providers p ON p.code = $4
+     LEFT JOIN circuits c ON c.code = $9
+     WHERE stl.id::text = $1
+       AND a.code = $2
+     RETURNING
+       stl.id,
+       (SELECT code FROM sites WHERE id = stl.a_site_id) AS a,
+       (SELECT code FROM sites WHERE id = stl.z_site_id) AS z,
+       stl.status,
+       stl.link_type,
+       stl.capacity_mbps,
+       stl.label`,
+    [
+      input.id,
+      input.aSiteCode,
+      input.zSiteCode,
+      input.providerCode ?? null,
+      input.linkType,
+      input.status ?? "planned",
+      input.capacityMbps ?? null,
+      input.label ?? null,
+      input.circuitCode ?? null
+    ]
+  );
+
+  return row ? mapTransportLink(row) : null;
+}
+
+export async function deleteSiteTransportLinkInDb(id: string) {
+  const row = await queryOne<{ id: string }>(
+    "DELETE FROM site_transport_links WHERE id::text = $1 RETURNING id",
+    [id]
+  );
+
+  return row;
 }
 
 export async function createSiteInDb(input: CreateSiteInput) {

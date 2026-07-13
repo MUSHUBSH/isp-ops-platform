@@ -1367,6 +1367,15 @@ function NetworkMapView({ siteMap }: { siteMap: SiteMap }) {
     capacityMbps: "",
     label: ""
   });
+  const [selectedLinkId, setSelectedLinkId] = useState(siteMap.links[0]?.id ?? "");
+  const [linkEditDraft, setLinkEditDraft] = useState({
+    aSiteCode: siteMap.links[0]?.a ?? siteMap.nodes[0]?.code ?? "",
+    zSiteCode: siteMap.links[0]?.z ?? siteMap.nodes[1]?.code ?? "",
+    linkType: siteMap.links[0]?.type ?? "transport",
+    status: siteMap.links[0]?.status ?? "planned",
+    capacityMbps: siteMap.links[0]?.capacityMbps ? String(siteMap.links[0].capacityMbps) : "",
+    label: siteMap.links[0]?.label ?? ""
+  });
   const [siteDraft, setSiteDraft] = useState({
     code: "",
     name: "",
@@ -1389,10 +1398,12 @@ function NetworkMapView({ siteMap }: { siteMap: SiteMap }) {
   const selectedLinks = selectedNode
     ? workingMap.links.filter((link) => link.a === selectedNode.code || link.z === selectedNode.code)
     : [];
+  const selectedTransportLink = workingMap.links.find((link) => link.id === selectedLinkId);
 
   useEffect(() => {
     setWorkingMap(siteMap);
     setSelectedCode((current) => current || siteMap.nodes[0]?.code || "");
+    setSelectedLinkId((current) => current || siteMap.links[0]?.id || "");
   }, [siteMap]);
 
   useEffect(() => {
@@ -1414,6 +1425,21 @@ function NetworkMapView({ siteMap }: { siteMap: SiteMap }) {
       .then(setDownstreamImpact)
       .catch(() => setDownstreamImpact(null));
   }, [selectedNode?.code, selectedNode?.latitude, selectedNode?.longitude]);
+
+  useEffect(() => {
+    if (!selectedTransportLink) {
+      return;
+    }
+
+    setLinkEditDraft({
+      aSiteCode: selectedTransportLink.a,
+      zSiteCode: selectedTransportLink.z,
+      linkType: selectedTransportLink.type,
+      status: selectedTransportLink.status,
+      capacityMbps: selectedTransportLink.capacityMbps ? String(selectedTransportLink.capacityMbps) : "",
+      label: selectedTransportLink.label
+    });
+  }, [selectedTransportLink]);
 
   async function refreshMap(nextSelectedCode = selectedNode?.code) {
     const nextMap = await apiGet<SiteMap>("/sites/map");
@@ -1465,6 +1491,44 @@ function NetworkMapView({ siteMap }: { siteMap: SiteMap }) {
         reason: "Alta rapida desde mapa de red"
       });
       await refreshMap(linkDraft.aSiteCode);
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateTransportLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedTransportLink || linkEditDraft.aSiteCode === linkEditDraft.zSiteCode) {
+      setFormState("error");
+      return;
+    }
+
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/sites/transport-links/${selectedTransportLink.id}`, {
+        ...linkEditDraft,
+        capacityMbps: linkEditDraft.capacityMbps ? Number(linkEditDraft.capacityMbps) : null,
+        label: linkEditDraft.label || null,
+        reason: "Edicion desde mapa de red"
+      });
+      await refreshMap(linkEditDraft.aSiteCode);
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function deleteTransportLink() {
+    if (!selectedTransportLink) return;
+    setFormState("saving");
+
+    try {
+      await apiDelete(`/sites/transport-links/${selectedTransportLink.id}`);
+      setSelectedLinkId("");
+      await refreshMap(selectedNode?.code);
       setFormState("saved");
     } catch {
       setFormState("error");
@@ -1603,8 +1667,8 @@ function NetworkMapView({ siteMap }: { siteMap: SiteMap }) {
                 const midY = (a.y + z.y) / 2;
 
                 return (
-                  <g key={link.id}>
-                    <line className={`mapLine ${link.status}`} x1={a.x} x2={z.x} y1={a.y} y2={z.y} />
+                  <g key={link.id} onClick={() => setSelectedLinkId(link.id)}>
+                    <line className={`mapLine ${link.status} ${link.id === selectedLinkId ? "selected" : ""}`} x1={a.x} x2={z.x} y1={a.y} y2={z.y} />
                     <text className="mapLineLabel" x={midX} y={midY - 8}>{formatCapacity(link.capacityMbps)}</text>
                   </g>
                 );
@@ -1660,7 +1724,7 @@ function NetworkMapView({ siteMap }: { siteMap: SiteMap }) {
           )}
           <div className="routeList">
             {(selectedLinks.length ? selectedLinks : workingMap.links).map((link) => (
-              <article className="routeItem" key={link.id}>
+              <article className={`routeItem ${link.id === selectedLinkId ? "selected" : ""}`} key={link.id} onClick={() => setSelectedLinkId(link.id)}>
                 <div>
                   <strong>{link.label}</strong>
                   <span>{link.type} - {formatCapacity(link.capacityMbps)}</span>
@@ -1802,6 +1866,75 @@ function NetworkMapView({ siteMap }: { siteMap: SiteMap }) {
                 />
               </label>
               <button type="submit">Guardar punto</button>
+            </form>
+
+            <form className="quickForm" onSubmit={updateTransportLink}>
+              <p className="eyebrow">Editar tramo</p>
+              <label>
+                Desde
+                <select
+                  disabled={!selectedTransportLink}
+                  onChange={(event) => setLinkEditDraft((current) => ({ ...current, aSiteCode: event.target.value }))}
+                  value={linkEditDraft.aSiteCode}
+                >
+                  {workingMap.nodes.map((node) => <option key={node.code} value={node.code}>{node.code}</option>)}
+                </select>
+              </label>
+              <label>
+                Hasta
+                <select
+                  disabled={!selectedTransportLink}
+                  onChange={(event) => setLinkEditDraft((current) => ({ ...current, zSiteCode: event.target.value }))}
+                  value={linkEditDraft.zSiteCode}
+                >
+                  {workingMap.nodes.map((node) => <option key={node.code} value={node.code}>{node.code}</option>)}
+                </select>
+              </label>
+              <label>
+                Tipo
+                <select
+                  disabled={!selectedTransportLink}
+                  onChange={(event) => setLinkEditDraft((current) => ({ ...current, linkType: event.target.value }))}
+                  value={linkEditDraft.linkType}
+                >
+                  <option value="transport">transport</option>
+                  <option value="distribution">distribution</option>
+                  <option value="last_mile">last_mile</option>
+                  <option value="backup">backup</option>
+                </select>
+              </label>
+              <label>
+                Estado
+                <select
+                  disabled={!selectedTransportLink}
+                  onChange={(event) => setLinkEditDraft((current) => ({ ...current, status: event.target.value }))}
+                  value={linkEditDraft.status}
+                >
+                  <option value="active">active</option>
+                  <option value="planned">planned</option>
+                  <option value="degraded">degraded</option>
+                  <option value="down">down</option>
+                </select>
+              </label>
+              <label>
+                Mbps
+                <input
+                  disabled={!selectedTransportLink}
+                  inputMode="numeric"
+                  onChange={(event) => setLinkEditDraft((current) => ({ ...current, capacityMbps: event.target.value }))}
+                  value={linkEditDraft.capacityMbps}
+                />
+              </label>
+              <label>
+                Etiqueta
+                <input
+                  disabled={!selectedTransportLink}
+                  onChange={(event) => setLinkEditDraft((current) => ({ ...current, label: event.target.value }))}
+                  value={linkEditDraft.label}
+                />
+              </label>
+              <button disabled={!selectedTransportLink || linkEditDraft.aSiteCode === linkEditDraft.zSiteCode} type="submit">Guardar tramo</button>
+              <button className="dangerButton" disabled={!selectedTransportLink} onClick={() => void deleteTransportLink()} type="button">Eliminar tramo</button>
             </form>
 
             <form className="quickForm" onSubmit={submitTransportLink}>

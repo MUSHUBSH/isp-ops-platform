@@ -704,6 +704,12 @@ h2 {
   stroke: var(--accent);
   stroke-linecap: round;
   stroke-width: 4;
+  cursor: pointer;
+}
+
+.mapLine.selected {
+  filter: drop-shadow(0 0 8px rgba(50, 211, 164, 0.8));
+  stroke-width: 7;
 }
 
 .mapLine.planned {
@@ -932,7 +938,13 @@ h2 {
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid var(--line);
+  cursor: pointer;
   padding-top: 10px;
+}
+
+.routeItem.selected {
+  border-color: rgba(50, 211, 164, 0.5);
+  color: var(--accent);
 }
 
 .routeItem div {
