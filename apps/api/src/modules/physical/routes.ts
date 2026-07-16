@@ -170,15 +170,35 @@ async function auditCreated(request: FastifyRequest, action: string, objectType:
   });
 }
 
-async function auditMutation(request: FastifyRequest, action: string, objectType: string, objectId: string, afterData?: unknown, reason?: string | null) {
+async function auditMutation(request: FastifyRequest, action: string, objectType: string, objectId: string, afterData?: unknown, reason?: string | null, beforeData?: unknown) {
   await recordAuditEvent({
     actorId: actorId(request),
     action,
     objectType,
     objectId,
+    beforeData,
     afterData,
     reason: reason ?? action
   });
+}
+
+async function findPhysicalRecord(kind: string, id: string) {
+  const records =
+    kind === "provider-capacities"
+      ? ((await listProviderCapacitiesFromDb()) ?? providerCapacities)
+      : kind === "fiber-spans"
+        ? ((await listFiberSpansFromDb()) ?? fiberSpans)
+        : kind === "fiber-strands"
+          ? ((await listFiberStrandsFromDb()) ?? fiberStrands)
+          : kind === "transceivers"
+            ? ((await listTransceiversFromDb()) ?? transceivers)
+            : kind === "patchcords"
+              ? ((await listPatchcordsFromDb()) ?? patchcords)
+              : kind === "datacenter-assets"
+                ? ((await listDatacenterAssetsFromDb()) ?? datacenterAssets)
+                : null;
+
+  return records?.find((record: { id: string }) => record.id === id) ?? null;
 }
 
 export async function registerPhysicalRoutes(app: FastifyInstance) {
@@ -343,11 +363,14 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     const parsed = statusSchema.safeParse(request.body);
     if (!parsed.success) return invalid(reply, parsed.error.issues);
 
+    const before = await findPhysicalRecord(kind, id);
     const updated = await updatePhysicalStatusInDb(kind as never, id, parsed.data.status);
     if (!updated) return reply.code(409).send({ message: "Record not found or PostgreSQL is required" });
 
-    await auditMutation(request, `physical.${config.objectType}.status_updated`, config.objectType, updated.id, updated, parsed.data.reason);
-    return { updated };
+    const after = before ? { ...before, status: updated.status } : updated;
+
+    await auditMutation(request, `physical.${config.objectType}.status_updated`, config.objectType, updated.id, after, parsed.data.reason, before);
+    return { updated: after };
   });
 
   app.delete("/physical/:kind/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
@@ -358,12 +381,18 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: "Physical entity not found" });
     }
 
+    const before = await findPhysicalRecord(kind, id);
+
+    if (!before) {
+      return reply.code(404).send({ message: "Physical record not found or PostgreSQL is required" });
+    }
+
     const deleted = await deletePhysicalRecordInDb(kind as never, id);
     if (!deleted) {
       return reply.code(409).send({ message: "Record not found, has dependencies, or PostgreSQL is required" });
     }
 
-    await auditMutation(request, `physical.${config.objectType}.deleted`, config.objectType, deleted.id, undefined, "Eliminacion desde modulo Datacenter");
+    await auditMutation(request, `physical.${config.objectType}.deleted`, config.objectType, deleted.id, undefined, "Eliminacion desde modulo Datacenter", before);
     return { deleted };
   });
 }
