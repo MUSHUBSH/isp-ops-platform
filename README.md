@@ -44,6 +44,7 @@ Comandos utiles:
 
 ```powershell
 pnpm db:health   # verifica PostgreSQL y conteos principales
+pnpm doctor      # diagnostico completo de entorno local
 pnpm db:backup   # genera backup SQL local en backups/
 pnpm db:reset    # recrea la base local con schema/seed
 pnpm db:psql     # abre psql dentro del contenedor

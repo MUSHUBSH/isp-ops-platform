@@ -33,6 +33,16 @@ Esto hace:
 .\scripts\db-health.ps1
 ```
 
+## Diagnostico completo
+
+Si no sabes si el problema esta en Docker, PostgreSQL, la API o la web:
+
+```powershell
+pnpm doctor
+```
+
+Este comando no modifica datos. Solo revisa herramientas locales, contenedor PostgreSQL, API y web.
+
 ## Resetear base local
 
 Cuando cambie `packages/database/schema.sql` o `seed.sql`, Docker no reaplica esos archivos si el volumen ya existe. Para recrear la DB local:
