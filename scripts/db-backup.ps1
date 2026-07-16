@@ -25,7 +25,16 @@ $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $outDir = Join-Path $root "backups"
 $outFile = Join-Path $outDir "ispops-$stamp.sql"
 
+if (-not (Test-Path $outDir)) {
+  New-Item -ItemType Directory -Path $outDir | Out-Null
+}
+
 Write-Host "[ISP Ops] Generando backup local: $outFile" -ForegroundColor Cyan
 docker compose exec -T postgres pg_dump -U ispops -d ispops --clean --if-exists > $outFile
+
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "[ISP Ops] No se pudo crear el backup. Verifica que PostgreSQL este corriendo." -ForegroundColor Red
+  exit 1
+}
 
 Write-Host "[ISP Ops] Backup creado." -ForegroundColor Green

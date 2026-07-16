@@ -28,10 +28,20 @@ docker compose down -v
 docker compose up -d postgres
 
 Write-Host "[ISP Ops] Esperando PostgreSQL..." -ForegroundColor Cyan
+$ready = $false
 for ($i = 0; $i -lt 30; $i++) {
   docker compose exec -T postgres pg_isready -U ispops -d ispops | Out-Null
-  if ($LASTEXITCODE -eq 0) { break }
+  if ($LASTEXITCODE -eq 0) {
+    $ready = $true
+    break
+  }
   Start-Sleep -Seconds 1
+}
+
+if (-not $ready) {
+  Write-Host "[ISP Ops] PostgreSQL no respondio despues de 30 segundos." -ForegroundColor Red
+  Write-Host "[ISP Ops] Revisa con: docker compose logs postgres" -ForegroundColor Yellow
+  exit 1
 }
 
 Write-Host "[ISP Ops] DB local reiniciada con schema y seed." -ForegroundColor Green
