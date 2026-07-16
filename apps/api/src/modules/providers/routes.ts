@@ -102,6 +102,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid provider payload", issues: parsed.error.issues });
     }
 
+    const before = (await getProviderFromDb(id)) ?? providers.find((item) => item.id === id || item.code === id) ?? null;
     const provider = await updateProviderInDb({ id, ...parsed.data });
 
     if (!provider) {
@@ -113,6 +114,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       action: "provider.updated",
       objectType: "provider",
       objectId: provider.id,
+      beforeData: before,
       afterData: provider,
       reason: parsed.data.reason ?? "Actualizacion de proveedor"
     });
@@ -128,6 +130,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid provider status payload", issues: parsed.error.issues });
     }
 
+    const before = (await getProviderFromDb(id)) ?? providers.find((item) => item.id === id || item.code === id) ?? null;
     const provider = await updateProviderStatusInDb(id, parsed.data.status);
 
     if (!provider) {
@@ -139,6 +142,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       action: "provider.status_updated",
       objectType: "provider",
       objectId: provider.id,
+      beforeData: before,
       afterData: provider,
       reason: parsed.data.reason ?? "Actualizacion de estado de proveedor"
     });
@@ -205,6 +209,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid contract payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listContractsFromDb()) ?? contracts).find((item) => item.id === id || item.code === id) ?? null;
     const contract = await updateContractInDb({ id, ...parsed.data });
 
     if (!contract) {
@@ -216,6 +221,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       action: "contract.updated",
       objectType: "contract",
       objectId: contract.id,
+      beforeData: before,
       afterData: contract,
       reason: parsed.data.reason ?? "Actualizacion de contrato"
     });
@@ -231,6 +237,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid contract status payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listContractsFromDb()) ?? contracts).find((item) => item.id === id || item.code === id) ?? null;
     const contract = await updateContractStatusInDb(id, parsed.data.status);
 
     if (!contract) {
@@ -242,6 +249,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       action: "contract.status_updated",
       objectType: "contract",
       objectId: contract.id,
+      beforeData: before,
       afterData: contract,
       reason: parsed.data.reason ?? "Actualizacion de estado de contrato"
     });
