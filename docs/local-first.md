@@ -17,6 +17,7 @@ Esta plataforma puede trabajarse sin VPS ni pagos mensuales. La forma recomendad
 Desde la raiz del repo:
 
 ```powershell
+pnpm setup:local
 .\scripts\local-dev.ps1
 ```
 

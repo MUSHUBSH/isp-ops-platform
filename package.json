@@ -8,6 +8,7 @@
     "db:down": "docker compose down",
     "dev": "pnpm --parallel --filter @ispops/web --filter @ispops/api dev",
     "doctor": "powershell -ExecutionPolicy Bypass -File ./scripts/doctor.ps1",
+    "setup:local": "powershell -ExecutionPolicy Bypass -File ./scripts/setup-local.ps1",
     "lint": "pnpm --recursive lint",
     "typecheck": "pnpm --recursive typecheck",
     "dev:local": "powershell -ExecutionPolicy Bypass -File ./scripts/local-dev.ps1",

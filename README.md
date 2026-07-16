@@ -25,6 +25,7 @@ Estado: prototipo operativo local para documentacion, IPAM, servicios, inventari
 ## Primeros comandos previstos
 
 ```bash
+pnpm setup:local
 pnpm install
 pnpm dev
 ```
@@ -37,6 +38,7 @@ La estructura esta preparada para evolucionar hacia servicios reales, migracione
 Como esta etapa se trabajara sin VPS ni presupuesto mensual, usa el flujo local:
 
 ```powershell
+pnpm setup:local # prepara .env y verifica herramientas
 pnpm dev:local
 ```
 
