@@ -256,6 +256,7 @@ export function App() {
             maintenanceWindows={data.maintenanceWindows}
             onReload={data.reload}
             prefixes={data.prefixes}
+            services={data.services}
             sites={data.sites}
           />
         )}
@@ -266,6 +267,7 @@ export function App() {
             incidents={data.incidents}
             onReload={data.reload}
             prefixes={data.prefixes}
+            services={data.services}
             sites={data.sites}
           />
         )}
@@ -277,6 +279,7 @@ export function App() {
             evidence={data.evidence}
             onReload={data.reload}
             prefixes={data.prefixes}
+            services={data.services}
             sites={data.sites}
           />
         )}
@@ -288,6 +291,7 @@ export function App() {
             devices={data.devices}
             onReload={data.reload}
             prefixes={data.prefixes}
+            services={data.services}
             sites={data.sites}
           />
         )}
@@ -5208,6 +5212,7 @@ function MonitoringView({
   maintenanceWindows,
   onReload,
   prefixes,
+  services,
   sites
 }: {
   alerts: Alert[];
@@ -5216,12 +5221,14 @@ function MonitoringView({
   maintenanceWindows: MaintenanceWindow[];
   onReload: () => Promise<void>;
   prefixes: Prefix[];
+  services: ServiceRecord[];
   sites: Site[];
 }) {
   const objectOptions = [
     ...sites.map((site) => ({ id: site.id, label: `${site.code} - ${site.name}`, type: "site" })),
     ...devices.map((device) => ({ id: device.id, label: `${device.name} - ${device.siteCode}`, type: "device" })),
     ...circuits.map((circuit) => ({ id: circuit.id, label: `${circuit.code} - ${circuit.name}`, type: "circuit" })),
+    ...services.map((service) => ({ id: service.id, label: `${service.code} - ${service.name}`, type: "service" })),
     ...prefixes.map((prefix) => ({ id: prefix.id, label: `${prefix.prefix} - ${prefix.siteCode}`, type: "prefix" }))
   ];
   const [alertForm, setAlertForm] = useState({
@@ -5572,6 +5579,7 @@ function IncidentsView({
   incidents,
   onReload,
   prefixes,
+  services,
   sites
 }: {
   circuits: Circuit[];
@@ -5579,12 +5587,14 @@ function IncidentsView({
   incidents: Incident[];
   onReload: () => Promise<void>;
   prefixes: Prefix[];
+  services: ServiceRecord[];
   sites: Site[];
 }) {
   const objectOptions = [
     ...sites.map((site) => ({ id: site.id, label: `${site.code} - ${site.name}`, type: "site" })),
     ...devices.map((device) => ({ id: device.id, label: `${device.name} - ${device.siteCode}`, type: "device" })),
     ...circuits.map((circuit) => ({ id: circuit.id, label: `${circuit.code} - ${circuit.name}`, type: "circuit" })),
+    ...services.map((service) => ({ id: service.id, label: `${service.code} - ${service.name}`, type: "service" })),
     ...prefixes.map((prefix) => ({ id: prefix.id, label: `${prefix.prefix} - ${prefix.siteCode}`, type: "prefix" }))
   ];
   const [selectedCode, setSelectedCode] = useState(incidents[0]?.code ?? "");
@@ -5962,6 +5972,7 @@ function DocumentationView({
   evidence,
   onReload,
   prefixes,
+  services,
   sites
 }: {
   circuits: Circuit[];
@@ -5970,12 +5981,14 @@ function DocumentationView({
   evidence: EvidenceFile[];
   onReload: () => Promise<void>;
   prefixes: Prefix[];
+  services: ServiceRecord[];
   sites: Site[];
 }) {
   const objectOptions = [
     ...sites.map((site) => ({ id: site.id, label: `${site.code} - ${site.name}`, type: "site" })),
     ...devices.map((device) => ({ id: device.id, label: `${device.name} - ${device.siteCode}`, type: "device" })),
     ...circuits.map((circuit) => ({ id: circuit.id, label: `${circuit.code} - ${circuit.name}`, type: "circuit" })),
+    ...services.map((service) => ({ id: service.id, label: `${service.code} - ${service.name}`, type: "service" })),
     ...prefixes.map((prefix) => ({ id: prefix.id, label: `${prefix.prefix} - ${prefix.siteCode}`, type: "prefix" }))
   ];
   const [documentForm, setDocumentForm] = useState({
@@ -6398,6 +6411,7 @@ function ChangesView({
   devices,
   onReload,
   prefixes,
+  services,
   sites
 }: {
   changes: ChangeRequest[];
@@ -6405,12 +6419,14 @@ function ChangesView({
   devices: Device[];
   onReload: () => Promise<void>;
   prefixes: Prefix[];
+  services: ServiceRecord[];
   sites: Site[];
 }) {
   const objectOptions = [
     ...sites.map((site) => ({ id: site.id, label: `${site.code} - ${site.name}`, type: "site" })),
     ...devices.map((device) => ({ id: device.id, label: `${device.name} - ${device.siteCode}`, type: "device" })),
     ...circuits.map((circuit) => ({ id: circuit.id, label: `${circuit.code} - ${circuit.name}`, type: "circuit" })),
+    ...services.map((service) => ({ id: service.id, label: `${service.code} - ${service.name}`, type: "service" })),
     ...prefixes.map((prefix) => ({ id: prefix.id, label: `${prefix.prefix} - ${prefix.siteCode}`, type: "prefix" }))
   ];
   const [changeForm, setChangeForm] = useState({
