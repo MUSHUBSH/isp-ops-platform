@@ -136,6 +136,12 @@ export async function registerMonitoringRoutes(app: FastifyInstance) {
 
   app.delete("/monitoring/alerts/:id", { preHandler: requirePermission("alerts.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const before = ((await listAlertsFromDb()) ?? alerts).find((alert) => alert.id === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Alert not found" });
+    }
+
     const deleted = await deleteAlertInDb(id);
 
     if (!deleted) {
@@ -147,6 +153,7 @@ export async function registerMonitoringRoutes(app: FastifyInstance) {
       action: "alert.deleted",
       objectType: "alert",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion manual desde consola NOC"
     });
 
