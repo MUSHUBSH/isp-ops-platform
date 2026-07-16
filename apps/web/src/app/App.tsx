@@ -3416,7 +3416,7 @@ function ServicesView({
               <label>Responsable<input onChange={(event) => setServiceEditForm((current) => ({ ...current, ownerTeam: event.target.value }))} value={serviceEditForm.ownerTeam} /></label>
               <label className="wideField">Descripcion<input onChange={(event) => setServiceEditForm((current) => ({ ...current, description: event.target.value }))} value={serviceEditForm.description} /></label>
               <button disabled={!serviceEditForm.code || !serviceEditForm.name} type="submit">Guardar servicio</button>
-              <button className="dangerButton" onClick={() => void deleteService()} type="button">Eliminar servicio</button>
+              <button className="dangerButton" onClick={() => void deleteService()} type="button">Eliminar sin dependencias</button>
             </form>
           )}
         </div>
