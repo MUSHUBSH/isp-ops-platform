@@ -5146,21 +5146,33 @@ function InterfaceStatusSelect({ onChange, value }: { onChange: (value: string) 
 
 function TopologyView({ graph }: { graph: ReturnType<typeof usePlatformData>["topology"] }) {
   const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [selectedNodeId, setSelectedNodeId] = useState(graph.nodes[0]?.id ?? "");
+  const nodeTypes = useMemo(() => Array.from(new Set(graph.nodes.map((node) => node.type))).sort(), [graph.nodes]);
   const filteredGraph = useMemo(() => {
-    if (statusFilter === "all") {
-      return graph;
+    let nodes = graph.nodes;
+    let edges = graph.edges;
+
+    if (statusFilter !== "all") {
+      edges = edges.filter((edge) => edge.status === statusFilter);
+      const nodeIds = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+      nodes = nodes.filter((node) => node.status === statusFilter || nodeIds.has(node.id));
     }
 
-    const edges = graph.edges.filter((edge) => edge.status === statusFilter);
-    const nodeIds = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
-    const nodes = graph.nodes.filter((node) => node.status === statusFilter || nodeIds.has(node.id));
+    if (typeFilter !== "all") {
+      const selectedTypeNodeIds = new Set(nodes.filter((node) => node.type === typeFilter).map((node) => node.id));
+      edges = edges.filter((edge) => selectedTypeNodeIds.has(edge.source) || selectedTypeNodeIds.has(edge.target));
+      const neighborIds = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+      nodes = nodes.filter((node) => selectedTypeNodeIds.has(node.id) || neighborIds.has(node.id));
+    }
+
     return { nodes, edges };
-  }, [graph, statusFilter]);
-  const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId);
-  const selectedEdges = selectedNode ? graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id) : [];
+  }, [graph, statusFilter, typeFilter]);
+  const selectedNode = filteredGraph.nodes.find((node) => node.id === selectedNodeId);
+  const selectedEdges = selectedNode ? filteredGraph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id) : [];
   const degradedEdges = graph.edges.filter((edge) => edge.status === "degraded").length;
   const downEdges = graph.edges.filter((edge) => edge.status === "down").length;
+  const serviceNodes = graph.nodes.filter((node) => node.type === "service").length;
 
   return (
     <ModulePage eyebrow="Topologia" title="Grafo operativo derivado de relaciones reales">
@@ -5169,24 +5181,31 @@ function TopologyView({ graph }: { graph: ReturnType<typeof usePlatformData>["to
         <Metric label="Enlaces" value={String(graph.edges.length)} tone="neutral" />
         <Metric label="Degradados" value={String(degradedEdges)} tone={degradedEdges > 0 ? "warning" : "neutral"} />
         <Metric label="Caidos" value={String(downEdges)} tone={downEdges > 0 ? "critical" : "neutral"} />
+        <Metric label="Servicios" value={String(serviceNodes)} tone="neutral" />
       </section>
       <section className="topologyWorkbench">
         <div className="panel topologyGraphPanel">
           <div className="panelHeader">
             <div><p className="eyebrow">Grafo</p><h2>Vista filtrada</h2></div>
-            <select className="inlineSelect" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-              <option value="all">Todos</option>
-              <option value="healthy">Healthy</option>
-              <option value="degraded">Degraded</option>
-              <option value="down">Down</option>
-            </select>
+            <div className="inlineControls">
+              <select className="inlineSelect" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+                <option value="all">Todos</option>
+                <option value="healthy">Healthy</option>
+                <option value="degraded">Degraded</option>
+                <option value="down">Down</option>
+              </select>
+              <select className="inlineSelect" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
+                <option value="all">Tipos</option>
+                {nodeTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+            </div>
           </div>
           <TopologyMap graph={filteredGraph} />
         </div>
         <div className="panel topologyDetailPanel">
           <div className="panelHeader"><div><p className="eyebrow">Detalle</p><h2>{selectedNode?.label ?? "Selecciona nodo"}</h2></div></div>
           <div className="deviceList compactList">
-            {graph.nodes.map((node) => (
+            {filteredGraph.nodes.map((node) => (
               <button className={node.id === selectedNodeId ? "deviceListItem active" : "deviceListItem"} key={node.id} onClick={() => setSelectedNodeId(node.id)} type="button">
                 <strong>{node.label}</strong>
                 <span>{node.type}</span>
@@ -5212,7 +5231,7 @@ function TopologyView({ graph }: { graph: ReturnType<typeof usePlatformData>["to
         <DataTable
           columns={["Origen", "Destino", "Estado", "Etiqueta"]}
           statusColumnIndex={2}
-          rows={graph.edges.map((edge) => [
+          rows={filteredGraph.edges.map((edge) => [
             graph.nodes.find((node) => node.id === edge.source)?.label ?? edge.source,
             graph.nodes.find((node) => node.id === edge.target)?.label ?? edge.target,
             edge.status,

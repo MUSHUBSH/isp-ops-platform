@@ -1330,6 +1330,13 @@ h2 {
   padding: 0 8px;
 }
 
+.inlineControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .compactList {
   max-height: 320px;
   overflow: auto;
