@@ -245,6 +245,31 @@ export async function listServiceEndpointsFromDb(serviceCode?: string) {
   return rows?.map(mapEndpoint) ?? null;
 }
 
+export async function getServiceEndpointFromDb(id: string) {
+  const row = await queryOne<ServiceEndpointRow>(
+    `SELECT
+       se.id,
+       svc.code AS service_code,
+       se.role,
+       s.code AS site_code,
+       d.name AS device,
+       i.name AS interface,
+       ip.address::text AS ip_address,
+       c.code AS circuit_code
+     FROM service_endpoints se
+     JOIN services svc ON svc.id = se.service_id
+     LEFT JOIN sites s ON s.id = se.site_id
+     LEFT JOIN devices d ON d.id = se.device_id
+     LEFT JOIN interfaces i ON i.id = se.interface_id
+     LEFT JOIN ip_addresses ip ON ip.id = se.ip_address_id
+     LEFT JOIN circuits c ON c.id = se.circuit_id
+     WHERE se.id = $1::uuid`,
+    [id]
+  );
+
+  return row ? mapEndpoint(row) : null;
+}
+
 export async function createServiceEndpointInDb(input: CreateServiceEndpointInput) {
   const row = await queryOne<ServiceEndpointRow>(
     `WITH selected_service AS (

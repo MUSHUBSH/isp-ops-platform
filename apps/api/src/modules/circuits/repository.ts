@@ -159,6 +159,28 @@ export async function listCircuitEndpointsFromDb(circuitCode?: string) {
   return rows?.map(mapEndpoint) ?? null;
 }
 
+export async function getCircuitEndpointFromDb(id: string) {
+  const row = await queryOne<EndpointRow>(
+    `SELECT
+       ce.id,
+       c.code AS circuit_code,
+       s.code AS site_code,
+       d.name AS device,
+       i.name AS interface,
+       ce.label,
+       ce.demarcation
+     FROM circuit_endpoints ce
+     JOIN circuits c ON c.id = ce.circuit_id
+     LEFT JOIN sites s ON s.id = ce.site_id
+     LEFT JOIN devices d ON d.id = ce.device_id
+     LEFT JOIN interfaces i ON i.id = ce.interface_id
+     WHERE ce.id = $1::uuid`,
+    [id]
+  );
+
+  return row ? mapEndpoint(row) : null;
+}
+
 export async function createCircuitInDb(input: CreateCircuitInput) {
   const row = await queryOne<CircuitRow>(
     `WITH selected_provider AS (

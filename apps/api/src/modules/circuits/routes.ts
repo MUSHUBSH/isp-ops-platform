@@ -8,6 +8,7 @@ import {
   createCircuitInDb,
   deleteCircuitEndpointInDb,
   deleteCircuitInDb,
+  getCircuitEndpointFromDb,
   getCircuitFromDb,
   getCircuitImpactFromDb,
   listCircuitEndpointsFromDb,
@@ -274,6 +275,12 @@ export async function registerCircuitRoutes(app: FastifyInstance) {
 
   app.delete("/circuits/:code/endpoints/:id", { preHandler: requirePermission("circuits.write") }, async (request, reply) => {
     const { id } = request.params as { code: string; id: string };
+    const before = await getCircuitEndpointFromDb(id);
+
+    if (!before) {
+      return reply.code(404).send({ message: "Endpoint not found or PostgreSQL unavailable" });
+    }
+
     const deleted = await deleteCircuitEndpointInDb(id);
 
     if (!deleted) {
@@ -285,6 +292,7 @@ export async function registerCircuitRoutes(app: FastifyInstance) {
       action: "circuit_endpoint.deleted",
       objectType: "circuit_endpoint",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion controlada de extremo de circuito"
     });
 

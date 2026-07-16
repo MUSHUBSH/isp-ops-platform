@@ -7,6 +7,7 @@ import {
   createServiceInDb,
   deleteServiceEndpointInDb,
   deleteServiceInDb,
+  getServiceEndpointFromDb,
   getServiceFromDb,
   listServiceEndpointsFromDb,
   listServicesFromDb,
@@ -207,6 +208,12 @@ export async function registerServiceRoutes(app: FastifyInstance) {
 
   app.delete("/services/endpoints/:id", { preHandler: requirePermission("services.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const before = await getServiceEndpointFromDb(id);
+
+    if (!before) {
+      return reply.code(404).send({ message: "Endpoint not found or PostgreSQL unavailable" });
+    }
+
     const deleted = await deleteServiceEndpointInDb(id);
 
     if (!deleted) {
@@ -218,6 +225,7 @@ export async function registerServiceRoutes(app: FastifyInstance) {
       action: "service_endpoint.deleted",
       objectType: "service_endpoint",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion controlada de extremo de servicio"
     });
 
