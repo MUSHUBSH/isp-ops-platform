@@ -1,6 +1,6 @@
 # ISP Ops Platform
 
-ERP tecnico interno para operacion de ISP multisede: NOC, proveedores, ASN/LACNIC, IPAM, sedes, equipos, interfaces, circuitos, topologia, monitoreo, documentacion, backups y auditoria.
+ERP tecnico interno para operacion de ISP multisede: NOC, proveedores, ASN/LACNIC, IPAM, servicios, sedes, equipos, interfaces, circuitos, topologia, monitoreo, documentacion, backups y auditoria.
 
 Este repositorio nace como monorepo API-first:
 
@@ -10,7 +10,7 @@ Este repositorio nace como monorepo API-first:
 - `packages/contracts`: contrato OpenAPI.
 - `docs`: decisiones de arquitectura y modelo.
 
-Estado: prototipo operativo local para documentacion, IPAM, inventario, topologia y NOC.
+Estado: prototipo operativo local para documentacion, IPAM, servicios, inventario, topologia y NOC.
 
 ## Principios
 
@@ -81,6 +81,8 @@ La semilla crea `admin@ispops.local` con rol `super_admin` y permisos completos.
 - `POST /providers`
 - `POST /ipam/prefixes`
 - `POST /ipam/addresses`
+- `POST /services`
+- `POST /services/:code/endpoints`
 - `GET /sites/:code/racks`
 - `POST /sites/:code/racks`
 - `GET /sites/:code/power`

@@ -3,7 +3,7 @@
 ## Componentes
 
 - Web NOC-first: React, TypeScript, tablas densas, paneles laterales, tema claro/oscuro y topologia.
-- API modular: dominios separados para sedes, proveedores, IPAM, inventario, circuitos, topologia, monitoreo, documentos y auditoria.
+- API modular: dominios separados para sedes, proveedores, IPAM, servicios, inventario, circuitos, topologia, monitoreo, documentos y auditoria.
 - PostgreSQL: fuente de verdad con tipos `cidr`, `inet` y `macaddr`.
 - Workers futuros: descubrimiento, monitoreo, backups, reconciliacion y alertas.
 - Object storage: evidencias, contratos, fotos, backups y adjuntos.
@@ -23,6 +23,7 @@
 - providers
 - resources
 - ipam
+- services
 - sites
 - inventory
 - circuits
