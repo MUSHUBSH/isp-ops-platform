@@ -255,6 +255,7 @@ export async function registerCircuitRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid circuit endpoint payload", issues: parsed.error.issues });
     }
 
+    const before = await getCircuitEndpointFromDb(id);
     const endpoint = await updateCircuitEndpointInDb({ id, ...parsed.data });
 
     if (!endpoint) {
@@ -266,6 +267,7 @@ export async function registerCircuitRoutes(app: FastifyInstance) {
       action: "circuit_endpoint.updated",
       objectType: "circuit_endpoint",
       objectId: endpoint.id,
+      beforeData: before,
       afterData: endpoint,
       reason: parsed.data.reason ?? "Actualizacion de extremo de circuito"
     });

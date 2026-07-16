@@ -188,6 +188,7 @@ export async function registerServiceRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid service endpoint payload", issues: parsed.error.issues });
     }
 
+    const before = await getServiceEndpointFromDb(id);
     const endpoint = await updateServiceEndpointInDb({ id, ...parsed.data });
 
     if (!endpoint) {
@@ -199,6 +200,7 @@ export async function registerServiceRoutes(app: FastifyInstance) {
       action: "service_endpoint.updated",
       objectType: "service_endpoint",
       objectId: endpoint.id,
+      beforeData: before,
       afterData: endpoint,
       reason: parsed.data.reason ?? "Actualizacion de extremo de servicio"
     });
