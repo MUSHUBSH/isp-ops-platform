@@ -9,6 +9,7 @@ Este repositorio nace como monorepo API-first:
 - `packages/database`: esquema PostgreSQL inicial.
 - `packages/contracts`: contrato OpenAPI.
 - `docs`: decisiones de arquitectura y modelo.
+- `docs/api-surface.md`: catalogo actual de endpoints implementados.
 
 Estado: prototipo operativo local para documentacion, IPAM, servicios, inventario, topologia y NOC.
 
