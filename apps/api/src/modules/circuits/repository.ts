@@ -373,6 +373,7 @@ export async function deleteCircuitInDb(code: string) {
          (SELECT COUNT(*) FROM fiber_strands WHERE circuit_id = selected.id) AS fiber_strands,
          (SELECT COUNT(*) FROM patchcords WHERE circuit_id = selected.id) AS patchcords,
          (SELECT COUNT(*) FROM site_transport_links WHERE circuit_id = selected.id) AS transport_links,
+         (SELECT COUNT(*) FROM service_endpoints WHERE circuit_id = selected.id) AS service_endpoints,
          (SELECT COUNT(*) FROM documents WHERE object_type = 'circuit' AND object_id = selected.id) AS documents,
          (SELECT COUNT(*) FROM evidence_files WHERE object_type = 'circuit' AND object_id = selected.id) AS evidence,
          (SELECT COUNT(*) FROM incident_impacts WHERE object_type = 'circuit' AND object_id = selected.id) AS incident_impacts
@@ -389,6 +390,7 @@ export async function deleteCircuitInDb(code: string) {
            AND fiber_strands = 0
            AND patchcords = 0
            AND transport_links = 0
+           AND service_endpoints = 0
            AND documents = 0
            AND evidence = 0
            AND incident_impacts = 0

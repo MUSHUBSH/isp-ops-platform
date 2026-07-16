@@ -186,7 +186,33 @@ export async function updateServiceInDb(input: UpdateServiceInput) {
 
 export async function deleteServiceInDb(codeOrId: string) {
   const row = await queryOne<{ id: string }>(
-    "DELETE FROM services WHERE code = $1 OR id::text = $1 RETURNING id",
+    `WITH selected AS (
+       SELECT id FROM services WHERE code = $1 OR id::text = $1
+     ),
+     dependency_counts AS (
+       SELECT
+         (SELECT COUNT(*) FROM service_endpoints WHERE service_id = selected.id) AS endpoints,
+         (SELECT COUNT(*) FROM documents WHERE object_type = 'service' AND object_id = selected.id) AS documents,
+         (SELECT COUNT(*) FROM evidence_files WHERE object_type = 'service' AND object_id = selected.id) AS evidence,
+         (SELECT COUNT(*) FROM incident_impacts WHERE object_type = 'service' AND object_id = selected.id) AS incident_impacts,
+         (SELECT COUNT(*) FROM change_impacts WHERE object_type = 'service' AND object_id = selected.id) AS change_impacts,
+         (SELECT COUNT(*) FROM maintenance_windows WHERE object_type = 'service' AND object_id = selected.id) AS maintenance_windows
+       FROM selected
+     )
+     DELETE FROM services
+     WHERE id = (SELECT id FROM selected)
+       AND EXISTS (SELECT 1 FROM selected)
+       AND EXISTS (
+         SELECT 1
+         FROM dependency_counts
+         WHERE endpoints = 0
+           AND documents = 0
+           AND evidence = 0
+           AND incident_impacts = 0
+           AND change_impacts = 0
+           AND maintenance_windows = 0
+       )
+     RETURNING id`,
     [codeOrId]
   );
 

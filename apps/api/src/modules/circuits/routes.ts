@@ -166,7 +166,7 @@ export async function registerCircuitRoutes(app: FastifyInstance) {
 
     if (!deleted) {
       return reply.code(409).send({
-        message: "Circuit has dependencies. Remove endpoints, transport links, fiber strands, patchcords, documents, evidence and incident impacts first."
+        message: "Circuit has dependencies. Remove circuit/service endpoints, transport links, fiber strands, patchcords, documents, evidence and incident impacts first."
       });
     }
 

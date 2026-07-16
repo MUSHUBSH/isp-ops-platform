@@ -137,7 +137,7 @@ export async function registerServiceRoutes(app: FastifyInstance) {
     const deleted = await deleteServiceInDb(code);
 
     if (!deleted) {
-      return reply.code(503).send({ message: "PostgreSQL is required to delete services" });
+      return reply.code(409).send({ message: "Service not found, has endpoints/documents/evidence/incidents/changes/maintenance windows, or PostgreSQL is required" });
     }
 
     await recordAuditEvent({

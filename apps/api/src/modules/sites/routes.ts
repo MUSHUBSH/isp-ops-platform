@@ -198,7 +198,7 @@ export async function registerSiteRoutes(app: FastifyInstance) {
 
     if (!deleted) {
       return reply.code(409).send({
-        message: "Site has dependencies. Remove devices, racks, power, prefixes, circuit endpoints, transport links, documents, evidence and incident impacts first."
+        message: "Site has dependencies. Remove devices, racks, power, prefixes, circuit/service endpoints, transport links, documents, evidence and incident impacts first."
       });
     }
 

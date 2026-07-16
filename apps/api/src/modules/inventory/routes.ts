@@ -432,7 +432,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
     const deleted = await deleteDeviceInDb(id);
 
     if (!deleted) {
-      return reply.code(409).send({ message: "Device not found, has dependencies, or PostgreSQL is required" });
+      return reply.code(409).send({ message: "Device not found, has interfaces/service endpoints/backups/docs/evidence/impacts, or PostgreSQL is required" });
     }
 
     await recordAuditEvent({
@@ -532,7 +532,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
     const deleted = await deleteInterfaceInDb(id);
 
     if (!deleted) {
-      return reply.code(409).send({ message: "Interface not found, has dependencies, or PostgreSQL is required" });
+      return reply.code(409).send({ message: "Interface not found, has IPs/links/circuit endpoints/service endpoints, or PostgreSQL is required" });
     }
 
     await recordAuditEvent({

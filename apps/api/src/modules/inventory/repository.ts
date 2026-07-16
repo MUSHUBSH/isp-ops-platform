@@ -450,6 +450,7 @@ export async function deleteDeviceInDb(id: string) {
     `DELETE FROM devices
      WHERE id = $1::uuid
        AND NOT EXISTS (SELECT 1 FROM interfaces WHERE device_id = devices.id)
+       AND NOT EXISTS (SELECT 1 FROM service_endpoints WHERE device_id = devices.id)
        AND NOT EXISTS (SELECT 1 FROM config_backups WHERE device_id = devices.id)
        AND NOT EXISTS (SELECT 1 FROM incident_impacts WHERE object_type = 'device' AND object_id = devices.id)
        AND NOT EXISTS (SELECT 1 FROM maintenance_windows WHERE object_type = 'device' AND object_id = devices.id)
@@ -522,6 +523,7 @@ export async function deleteInterfaceInDb(id: string) {
        AND NOT EXISTS (SELECT 1 FROM ip_addresses WHERE interface_id = interfaces.id)
        AND NOT EXISTS (SELECT 1 FROM interface_links WHERE a_interface_id = interfaces.id OR b_interface_id = interfaces.id)
        AND NOT EXISTS (SELECT 1 FROM circuit_endpoints WHERE interface_id = interfaces.id)
+       AND NOT EXISTS (SELECT 1 FROM service_endpoints WHERE interface_id = interfaces.id)
      RETURNING id`,
     [id]
   );

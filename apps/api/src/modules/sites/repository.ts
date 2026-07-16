@@ -444,6 +444,7 @@ export async function deleteSiteInDb(code: string) {
          (SELECT COUNT(*) FROM power_assets WHERE site_id = selected.id) AS power_assets,
          (SELECT COUNT(*) FROM prefixes WHERE site_id = selected.id) AS prefixes,
          (SELECT COUNT(*) FROM circuit_endpoints WHERE site_id = selected.id) AS circuit_endpoints,
+         (SELECT COUNT(*) FROM service_endpoints WHERE site_id = selected.id) AS service_endpoints,
          (SELECT COUNT(*) FROM site_transport_links WHERE a_site_id = selected.id OR z_site_id = selected.id) AS transport_links,
          (SELECT COUNT(*) FROM documents WHERE object_type = 'site' AND object_id = selected.id) AS documents,
          (SELECT COUNT(*) FROM evidence_files WHERE object_type = 'site' AND object_id = selected.id) AS evidence,
@@ -462,6 +463,7 @@ export async function deleteSiteInDb(code: string) {
            AND power_assets = 0
            AND prefixes = 0
            AND circuit_endpoints = 0
+           AND service_endpoints = 0
            AND transport_links = 0
            AND documents = 0
            AND evidence = 0
