@@ -176,13 +176,14 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
   });
 
   app.patch("/sites/:code/racks/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const { code, id } = request.params as { code: string; id: string };
     const parsed = updateRackSchema.safeParse(request.body);
 
     if (!parsed.success) {
       return reply.code(400).send({ message: "Invalid rack payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listRacksBySiteFromDb(code)) ?? rackViews.filter((rack) => rack.siteCode === code)).find((rack) => rack.id === id) ?? null;
     const rack = await updateRackInDb({ id, ...parsed.data });
 
     if (!rack) {
@@ -194,6 +195,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "rack.updated",
       objectType: "rack",
       objectId: rack.id,
+      beforeData: before,
       afterData: rack,
       reason: parsed.data.reason ?? "Actualizacion de rack"
     });
@@ -264,13 +266,14 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
   });
 
   app.patch("/sites/:code/power-assets/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const { code, id } = request.params as { code: string; id: string };
     const parsed = updatePowerAssetSchema.safeParse(request.body);
 
     if (!parsed.success) {
       return reply.code(400).send({ message: "Invalid power asset payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listPowerAssetsBySiteFromDb(code)) ?? powerAssets.filter((asset) => asset.siteCode === code)).find((asset) => asset.id === id) ?? null;
     const asset = await updatePowerAssetInDb({ id, ...parsed.data });
 
     if (!asset) {
@@ -282,6 +285,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "power_asset.updated",
       objectType: "power_asset",
       objectId: asset.id,
+      beforeData: before,
       afterData: asset,
       reason: parsed.data.reason ?? "Actualizacion de activo electrico"
     });
@@ -342,13 +346,14 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
   });
 
   app.patch("/sites/:code/power-feeds/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const { code, id } = request.params as { code: string; id: string };
     const parsed = updatePowerFeedSchema.safeParse(request.body);
 
     if (!parsed.success) {
       return reply.code(400).send({ message: "Invalid power feed payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listPowerFeedsBySiteFromDb(code)) ?? powerFeeds.filter((feed) => feed.siteCode === code)).find((feed) => feed.id === id) ?? null;
     const feed = await updatePowerFeedInDb({ id, ...parsed.data });
 
     if (!feed) {
@@ -360,6 +365,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "power_feed.updated",
       objectType: "power_feed",
       objectId: feed.id,
+      beforeData: before,
       afterData: feed,
       reason: parsed.data.reason ?? "Actualizacion de alimentacion electrica"
     });
@@ -430,6 +436,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid device payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listDevicesFromDb()) ?? devices).find((device) => device.id === id) ?? null;
     const device = await updateDeviceInDb({ id, ...parsed.data });
 
     if (!device) {
@@ -441,6 +448,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "device.updated",
       objectType: "device",
       objectId: device.id,
+      beforeData: before,
       afterData: device,
       reason: parsed.data.reason ?? "Actualizacion de equipo"
     });
@@ -482,6 +490,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid device placement payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listDevicesFromDb()) ?? devices).find((device) => device.id === id) ?? null;
     const device = await updateDevicePlacementInDb({ id, ...parsed.data });
 
     if (!device) {
@@ -493,6 +502,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "device.placement.updated",
       objectType: "device",
       objectId: device.id,
+      beforeData: before,
       afterData: { ...device, placement: parsed.data },
       reason: parsed.data.reason ?? "Asignacion fisica de equipo a rack"
     });
@@ -537,6 +547,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid interface payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listInterfacesFromDb()) ?? interfaces).find((networkInterface) => networkInterface.id === id) ?? null;
     const networkInterface = await updateInterfaceInDb({ id, ...parsed.data });
 
     if (!networkInterface) {
@@ -548,6 +559,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "interface.updated",
       objectType: "interface",
       objectId: networkInterface.id,
+      beforeData: before,
       afterData: networkInterface,
       reason: parsed.data.reason ?? "Actualizacion de interfaz"
     });
@@ -618,6 +630,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Invalid interface link payload", issues: parsed.error.issues });
     }
 
+    const before = ((await listInterfaceLinksFromDb()) ?? interfaceLinks).find((link) => link.id === id) ?? null;
     const link = await updateInterfaceLinkInDb({ id, ...parsed.data });
 
     if (!link) {
@@ -629,6 +642,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "interface_link.updated",
       objectType: "interface_link",
       objectId: link.id,
+      beforeData: before,
       afterData: link,
       reason: parsed.data.reason ?? "Actualizacion de enlace entre interfaces"
     });
