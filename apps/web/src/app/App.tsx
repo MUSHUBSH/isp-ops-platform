@@ -3187,6 +3187,10 @@ function ServicesView({
   const activeServices = services.filter((service) => service.status === "active").length;
   const degradedServices = services.filter((service) => service.status === "degraded" || service.status === "down").length;
   const servicesWithoutEndpoints = services.filter((service) => service.endpointCount === 0).length;
+  const selectedServiceSites = new Set(selectedEndpoints.map((endpoint) => endpoint.siteCode).filter(Boolean)).size;
+  const selectedServiceDevices = new Set(selectedEndpoints.map((endpoint) => endpoint.device).filter(Boolean)).size;
+  const selectedServiceIps = selectedEndpoints.filter((endpoint) => endpoint.ipAddress).length;
+  const selectedServiceCircuits = new Set(selectedEndpoints.map((endpoint) => endpoint.circuitCode).filter(Boolean)).size;
 
   useEffect(() => {
     if (!selectedService && services[0]) {
@@ -3461,6 +3465,21 @@ function ServicesView({
 
         <div className="panel">
           <div className="panelHeader"><div><p className="eyebrow">Contexto</p><h2>{selectedService?.name ?? "Servicio"}</h2></div></div>
+          <section className="metricGrid compactMetrics">
+            <Metric label="Sedes" value={String(selectedServiceSites)} tone="neutral" />
+            <Metric label="Equipos" value={String(selectedServiceDevices)} tone="neutral" />
+            <Metric label="IPs" value={String(selectedServiceIps)} tone={selectedServiceIps === 0 ? "warning" : "neutral"} />
+            <Metric label="Circuitos" value={String(selectedServiceCircuits)} tone="neutral" />
+          </section>
+          <div className="compactList">
+            {selectedEndpoints.slice(0, 5).map((endpoint) => (
+              <article key={endpoint.id}>
+                <strong>{endpoint.role} - {endpoint.siteCode ?? "sin sede"}</strong>
+                <span>{endpoint.device ?? "sin equipo"} {endpoint.interface ?? ""} / {endpoint.ipAddress ?? "sin IP"} / {endpoint.circuitCode ?? "sin circuito"}</span>
+              </article>
+            ))}
+            {selectedEndpoints.length === 0 && <span className="mutedText">Este servicio todavia no tiene endpoints asociados.</span>}
+          </div>
           <DataTable
             columns={["Rol", "Sede", "Equipo", "Interfaz", "IP", "Circuito"]}
             rows={selectedEndpoints.map((endpoint) => [
