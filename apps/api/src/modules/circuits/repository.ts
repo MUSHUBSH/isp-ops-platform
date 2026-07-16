@@ -580,3 +580,12 @@ export async function updateCircuitEndpointInDb(input: UpdateCircuitEndpointInpu
 
   return row ? mapEndpoint(row) : null;
 }
+
+export async function deleteCircuitEndpointInDb(id: string) {
+  const row = await queryOne<{ id: string }>(
+    "DELETE FROM circuit_endpoints WHERE id = $1::uuid RETURNING id",
+    [id]
+  );
+
+  return row;
+}

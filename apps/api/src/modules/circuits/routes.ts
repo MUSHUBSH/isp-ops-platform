@@ -6,6 +6,7 @@ import { circuits } from "../../shared/demo-data.js";
 import {
   createCircuitEndpointInDb,
   createCircuitInDb,
+  deleteCircuitEndpointInDb,
   deleteCircuitInDb,
   getCircuitFromDb,
   getCircuitImpactFromDb,
@@ -269,5 +270,24 @@ export async function registerCircuitRoutes(app: FastifyInstance) {
     });
 
     return { endpoint };
+  });
+
+  app.delete("/circuits/:code/endpoints/:id", { preHandler: requirePermission("circuits.write") }, async (request, reply) => {
+    const { id } = request.params as { code: string; id: string };
+    const deleted = await deleteCircuitEndpointInDb(id);
+
+    if (!deleted) {
+      return reply.code(404).send({ message: "Endpoint not found or PostgreSQL unavailable" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "circuit_endpoint.deleted",
+      objectType: "circuit_endpoint",
+      objectId: deleted.id,
+      reason: "Eliminacion controlada de extremo de circuito"
+    });
+
+    return { deleted };
   });
 }

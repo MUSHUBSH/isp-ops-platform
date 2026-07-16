@@ -3663,6 +3663,22 @@ function CircuitsView({
     }
   }
 
+  async function deleteEndpoint() {
+    if (!selectedCircuit || !selectedCircuitEndpoint) return;
+    setFormState("saving");
+
+    try {
+      await apiDelete(`/circuits/${selectedCircuit.code}/endpoints/${selectedCircuitEndpoint.id}`);
+      setSelectedEndpointId("");
+      const payload = await apiGet<{ endpoints: CircuitEndpoint[] }>(`/circuits/${selectedCircuit.code}/endpoints`);
+      setCircuitEndpoints(payload.endpoints);
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
   async function updateCircuit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCircuit) return;
@@ -3800,6 +3816,7 @@ function CircuitsView({
               </select></label>
               <label className="wideField">Demarcacion<input onChange={(event) => setEndpointEditForm((current) => ({ ...current, demarcation: event.target.value }))} placeholder="ODF, bandeja, puerto, sala, poste o handoff" value={endpointEditForm.demarcation} /></label>
               <button disabled={!endpointEditForm.label} type="submit">Guardar extremo</button>
+              <button className="dangerButton" onClick={() => void deleteEndpoint()} type="button">Eliminar extremo</button>
               <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
             </form>
           )}
