@@ -148,6 +148,12 @@ export async function registerProviderRoutes(app: FastifyInstance) {
 
   app.delete("/providers/:id", { preHandler: requirePermission("providers.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const before = (await getProviderFromDb(id)) ?? providers.find((provider) => provider.id === id || provider.code === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Provider not found" });
+    }
+
     const deleted = await deleteProviderInDb(id);
 
     if (!deleted) {
@@ -159,6 +165,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       action: "provider.deleted",
       objectType: "provider",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion segura de proveedor"
     });
 
@@ -244,6 +251,12 @@ export async function registerProviderRoutes(app: FastifyInstance) {
 
   app.delete("/providers/contracts/:id", { preHandler: requirePermission("providers.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const before = ((await listContractsFromDb()) ?? contracts).find((contract) => contract.id === id || contract.code === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Contract not found" });
+    }
+
     const deleted = await deleteContractInDb(id);
 
     if (!deleted) {
@@ -255,6 +268,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       action: "contract.deleted",
       objectType: "contract",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion segura de contrato"
     });
 
