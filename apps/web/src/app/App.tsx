@@ -11,6 +11,7 @@ import {
   GitBranch,
   GitPullRequest,
   HardDrive,
+  Layers3,
   Map as MapIcon,
   Network,
   RadioTower,
@@ -48,6 +49,8 @@ import type {
   Provider,
   ProviderCapacity,
   ProviderContract,
+  ServiceEndpoint,
+  ServiceRecord,
   Site,
   Transceiver,
   SiteMap,
@@ -63,6 +66,7 @@ type ModuleKey =
   | "providers"
   | "resources"
   | "ipam"
+  | "services"
   | "sites"
   | "map"
   | "racks"
@@ -83,6 +87,7 @@ const modules = [
   { key: "providers", label: "Proveedores", icon: Building2 },
   { key: "resources", label: "ASN / LACNIC", icon: ShieldCheck },
   { key: "ipam", label: "IPAM", icon: Database },
+  { key: "services", label: "Servicios", icon: Layers3 },
   { key: "sites", label: "Sedes", icon: RadioTower },
   { key: "map", label: "Mapa de red", icon: MapIcon },
   { key: "racks", label: "Racks / energia", icon: BatteryCharging },
@@ -112,6 +117,7 @@ export function App() {
     const index = [
       ...data.sites.map((item) => ({ type: "Sede", label: item.code, context: item.name, module: "sites" as ModuleKey })),
       ...data.providers.map((item) => ({ type: "Proveedor", label: item.name, context: item.nocEmail, module: "providers" as ModuleKey })),
+      ...data.services.map((item) => ({ type: "Servicio", label: item.code, context: `${item.name} - ${item.status}`, module: "services" as ModuleKey })),
       ...data.devices.map((item) => ({ type: "Equipo", label: item.name, context: `${item.role} - ${item.siteCode}`, module: "devices" as ModuleKey })),
       ...data.interfaces.map((item) => ({ type: "Interfaz", label: `${item.device} ${item.name}`, context: `${item.type} - ${item.status}`, module: "interfaces" as ModuleKey })),
       ...data.documents.map((item) => ({ type: "Documento", label: item.title, context: `${item.objectType} - ${item.createdBy}`, module: "docs" as ModuleKey })),
@@ -197,6 +203,18 @@ export function App() {
         {activeModule === "providers" && <ProvidersView contracts={data.providerContracts} onReload={data.reload} providers={data.providers} />}
         {activeModule === "resources" && <ResourcesView onReload={data.reload} prefixes={data.prefixes} sites={data.sites} />}
         {activeModule === "ipam" && <IpamView circuits={data.circuits} interfaceLinks={data.interfaceLinks} interfaces={data.interfaces} ips={data.ips} onReload={data.reload} prefixes={data.prefixes} />}
+        {activeModule === "services" && (
+          <ServicesView
+            circuits={data.circuits}
+            devices={data.devices}
+            endpoints={data.serviceEndpoints}
+            interfaces={data.interfaces}
+            ips={data.ips}
+            onReload={data.reload}
+            services={data.services}
+            sites={data.sites}
+          />
+        )}
         {activeModule === "sites" && (
           <SitesView
             circuits={data.circuits}
@@ -272,7 +290,7 @@ export function App() {
           />
         )}
         {activeModule === "history" && <HistoryView audit={data.audit} />}
-        {!["noc", "providers", "resources", "ipam", "sites", "map", "racks", "devices", "interfaces", "datacenter", "circuits", "topology", "monitoring", "incidents", "docs", "backups", "changes", "history"].includes(activeModule) && (
+        {!["noc", "providers", "resources", "ipam", "services", "sites", "map", "racks", "devices", "interfaces", "datacenter", "circuits", "topology", "monitoring", "incidents", "docs", "backups", "changes", "history"].includes(activeModule) && (
           <PlaceholderView module={modules.find((item) => item.key === activeModule)?.label ?? "Modulo"} />
         )}
       </section>
@@ -3038,6 +3056,381 @@ function DatacenterView({
             rows={assets.map((asset) => [asset.siteCode, asset.rackCode ?? "sala", asset.name, asset.assetType, asset.units ? String(asset.units) : "", asset.ports ? String(asset.ports) : "", asset.status, asset.notes ?? ""])}
           />
         </div>
+      </section>
+    </ModulePage>
+  );
+}
+
+function ServicesView({
+  circuits,
+  devices,
+  endpoints,
+  interfaces,
+  ips,
+  onReload,
+  services,
+  sites
+}: {
+  circuits: Circuit[];
+  devices: Device[];
+  endpoints: ServiceEndpoint[];
+  interfaces: NetworkInterface[];
+  ips: IpAssignment[];
+  onReload: () => Promise<void>;
+  services: ServiceRecord[];
+  sites: Site[];
+}) {
+  const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [serviceForm, setServiceForm] = useState({
+    code: "",
+    name: "",
+    serviceType: "transport",
+    status: "active",
+    ownerTeam: "noc",
+    description: ""
+  });
+  const [selectedServiceCode, setSelectedServiceCode] = useState(services[0]?.code ?? "");
+  const selectedService = services.find((service) => service.code === selectedServiceCode) ?? services[0];
+  const selectedEndpoints = endpoints.filter((endpoint) => endpoint.serviceCode === selectedService?.code);
+  const [endpointForm, setEndpointForm] = useState({
+    role: "primary",
+    siteCode: sites[0]?.code ?? "",
+    deviceName: "",
+    interfaceName: "",
+    ipAddress: "",
+    circuitCode: ""
+  });
+  const [selectedEndpointId, setSelectedEndpointId] = useState(endpoints[0]?.id ?? "");
+  const selectedEndpoint = endpoints.find((endpoint) => endpoint.id === selectedEndpointId);
+  const [endpointEditForm, setEndpointEditForm] = useState({
+    serviceCode: selectedEndpoint?.serviceCode ?? selectedService?.code ?? "",
+    role: selectedEndpoint?.role ?? "",
+    siteCode: selectedEndpoint?.siteCode ?? "",
+    deviceName: selectedEndpoint?.device ?? "",
+    interfaceName: selectedEndpoint?.interface ?? "",
+    ipAddress: selectedEndpoint?.ipAddress ?? "",
+    circuitCode: selectedEndpoint?.circuitCode ?? ""
+  });
+  const [serviceEditForm, setServiceEditForm] = useState({
+    code: selectedService?.code ?? "",
+    name: selectedService?.name ?? "",
+    serviceType: selectedService?.serviceType ?? "transport",
+    status: selectedService?.status ?? "active",
+    ownerTeam: selectedService?.ownerTeam ?? "",
+    description: selectedService?.description ?? ""
+  });
+
+  const selectedEndpointDevice = devices.find((device) => device.name === endpointForm.deviceName);
+  const endpointInterfaces = interfaces.filter((networkInterface) => networkInterface.device === selectedEndpointDevice?.name);
+  const selectedEndpointEditDevice = devices.find((device) => device.name === endpointEditForm.deviceName);
+  const endpointEditInterfaces = interfaces.filter((networkInterface) => networkInterface.device === selectedEndpointEditDevice?.name);
+  const totalEndpoints = endpoints.length;
+  const activeServices = services.filter((service) => service.status === "active").length;
+  const degradedServices = services.filter((service) => service.status === "degraded" || service.status === "down").length;
+  const servicesWithoutEndpoints = services.filter((service) => service.endpointCount === 0).length;
+
+  useEffect(() => {
+    if (!selectedService && services[0]) {
+      setSelectedServiceCode(services[0].code);
+    }
+  }, [selectedService, services]);
+
+  useEffect(() => {
+    if (!selectedService) {
+      return;
+    }
+
+    setServiceEditForm({
+      code: selectedService.code,
+      name: selectedService.name,
+      serviceType: selectedService.serviceType,
+      status: selectedService.status,
+      ownerTeam: selectedService.ownerTeam ?? "",
+      description: selectedService.description ?? ""
+    });
+  }, [selectedService]);
+
+  useEffect(() => {
+    if (!selectedEndpoint) {
+      return;
+    }
+
+    setEndpointEditForm({
+      serviceCode: selectedEndpoint.serviceCode,
+      role: selectedEndpoint.role,
+      siteCode: selectedEndpoint.siteCode ?? "",
+      deviceName: selectedEndpoint.device ?? "",
+      interfaceName: selectedEndpoint.interface ?? "",
+      ipAddress: selectedEndpoint.ipAddress ?? "",
+      circuitCode: selectedEndpoint.circuitCode ?? ""
+    });
+  }, [selectedEndpoint]);
+
+  useEffect(() => {
+    if (!selectedEndpointId && endpoints[0]) {
+      setSelectedEndpointId(endpoints[0].id);
+    }
+  }, [endpoints, selectedEndpointId]);
+
+  async function withSave(action: () => Promise<void>) {
+    setFormState("saving");
+    try {
+      await action();
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function createService(event: FormEvent) {
+    event.preventDefault();
+    await withSave(async () => {
+      const payload = {
+        ...serviceForm,
+        ownerTeam: serviceForm.ownerTeam || null,
+        description: serviceForm.description || null,
+        reason: "Alta de servicio desde UI"
+      };
+      const response = await apiPost<{ service: ServiceRecord }>("/services", payload);
+      setSelectedServiceCode(response.service.code);
+      setServiceForm({ code: "", name: "", serviceType: "transport", status: "active", ownerTeam: "noc", description: "" });
+    });
+  }
+
+  async function updateService(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedService) {
+      return;
+    }
+
+    await withSave(async () => {
+      const response = await apiPatch<{ service: ServiceRecord }>(`/services/${selectedService.code}`, {
+        ...serviceEditForm,
+        ownerTeam: serviceEditForm.ownerTeam || null,
+        description: serviceEditForm.description || null,
+        reason: "Actualizacion de servicio desde UI"
+      });
+      setSelectedServiceCode(response.service.code);
+    });
+  }
+
+  async function deleteService() {
+    if (!selectedService) {
+      return;
+    }
+
+    await withSave(async () => {
+      await apiDelete(`/services/${selectedService.code}`);
+      setSelectedServiceCode("");
+    });
+  }
+
+  async function createEndpoint(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedService) {
+      return;
+    }
+
+    await withSave(async () => {
+      const response = await apiPost<{ endpoint: ServiceEndpoint }>(`/services/${selectedService.code}/endpoints`, {
+        ...endpointForm,
+        siteCode: endpointForm.siteCode || null,
+        deviceName: endpointForm.deviceName || null,
+        interfaceName: endpointForm.interfaceName || null,
+        ipAddress: endpointForm.ipAddress || null,
+        circuitCode: endpointForm.circuitCode || null,
+        reason: "Asociacion de endpoint a servicio"
+      });
+      setSelectedEndpointId(response.endpoint.id);
+      setEndpointForm({ role: "primary", siteCode: endpointForm.siteCode, deviceName: "", interfaceName: "", ipAddress: "", circuitCode: "" });
+    });
+  }
+
+  async function updateEndpoint(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedEndpoint) {
+      return;
+    }
+
+    await withSave(async () => {
+      await apiPatch<{ endpoint: ServiceEndpoint }>(`/services/endpoints/${selectedEndpoint.id}`, {
+        ...endpointEditForm,
+        siteCode: endpointEditForm.siteCode || null,
+        deviceName: endpointEditForm.deviceName || null,
+        interfaceName: endpointEditForm.interfaceName || null,
+        ipAddress: endpointEditForm.ipAddress || null,
+        circuitCode: endpointEditForm.circuitCode || null,
+        reason: "Actualizacion de endpoint de servicio"
+      });
+    });
+  }
+
+  async function deleteEndpoint() {
+    if (!selectedEndpoint) {
+      return;
+    }
+
+    await withSave(async () => {
+      await apiDelete(`/services/endpoints/${selectedEndpoint.id}`);
+      setSelectedEndpointId("");
+    });
+  }
+
+  return (
+    <ModulePage eyebrow="Servicios" title="Trazabilidad operacional por servicio, IP, equipo y transporte">
+      <section className="metricGrid compactMetrics">
+        <Metric label="Servicios activos" value={String(activeServices)} tone="neutral" />
+        <Metric label="Degradados/caidos" value={String(degradedServices)} tone={degradedServices > 0 ? "warning" : "neutral"} />
+        <Metric label="Endpoints documentados" value={String(totalEndpoints)} tone="neutral" />
+        <Metric label="Sin endpoints" value={String(servicesWithoutEndpoints)} tone={servicesWithoutEndpoints > 0 ? "warning" : "neutral"} />
+      </section>
+
+      <section className="circuitWorkbench">
+        <div className="panel">
+          <div className="panelHeader"><div><p className="eyebrow">Catalogo</p><h2>Alta rapida de servicio</h2></div></div>
+          <form className="quickForm" onSubmit={createService}>
+            <label>Codigo<input onChange={(event) => setServiceForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={serviceForm.code} /></label>
+            <label>Tipo<select onChange={(event) => setServiceForm((current) => ({ ...current, serviceType: event.target.value }))} value={serviceForm.serviceType}>
+              <option value="transport">transport</option><option value="internet">internet</option><option value="routing">routing</option><option value="management">management</option><option value="customer">customer</option>
+            </select></label>
+            <label className="wideField">Nombre<input onChange={(event) => setServiceForm((current) => ({ ...current, name: event.target.value }))} value={serviceForm.name} /></label>
+            <label>Estado<select onChange={(event) => setServiceForm((current) => ({ ...current, status: event.target.value }))} value={serviceForm.status}>
+              <option value="active">active</option><option value="degraded">degraded</option><option value="down">down</option><option value="planned">planned</option><option value="retired">retired</option>
+            </select></label>
+            <label>Equipo responsable<input onChange={(event) => setServiceForm((current) => ({ ...current, ownerTeam: event.target.value }))} value={serviceForm.ownerTeam} /></label>
+            <label className="wideField">Descripcion<input onChange={(event) => setServiceForm((current) => ({ ...current, description: event.target.value }))} value={serviceForm.description} /></label>
+            <button disabled={!serviceForm.code || !serviceForm.name} type="submit">Crear servicio</button>
+            <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+          </form>
+        </div>
+
+        <div className="panel">
+          <div className="panelHeader"><div><p className="eyebrow">Endpoint</p><h2>Vincular servicio a red real</h2></div></div>
+          <form className="quickForm" onSubmit={createEndpoint}>
+            <label className="wideField">Servicio<select onChange={(event) => setSelectedServiceCode(event.target.value)} value={selectedService?.code ?? selectedServiceCode}>
+              {services.map((service) => <option key={service.id} value={service.code}>{service.code} - {service.name}</option>)}
+            </select></label>
+            <label>Rol<input onChange={(event) => setEndpointForm((current) => ({ ...current, role: event.target.value }))} value={endpointForm.role} /></label>
+            <label>Sede<select onChange={(event) => setEndpointForm((current) => ({ ...current, siteCode: event.target.value, deviceName: "", interfaceName: "" }))} value={endpointForm.siteCode}>
+              <option value="">Sin sede</option>
+              {sites.map((site) => <option key={site.id} value={site.code}>{site.code} - {site.name}</option>)}
+            </select></label>
+            <label>Equipo<select onChange={(event) => setEndpointForm((current) => ({ ...current, deviceName: event.target.value, interfaceName: "" }))} value={endpointForm.deviceName}>
+              <option value="">Sin equipo</option>
+              {devices.filter((device) => !endpointForm.siteCode || device.siteCode === endpointForm.siteCode).map((device) => <option key={device.id} value={device.name}>{device.name}</option>)}
+            </select></label>
+            <label>Interfaz<select disabled={!selectedEndpointDevice} onChange={(event) => setEndpointForm((current) => ({ ...current, interfaceName: event.target.value }))} value={endpointForm.interfaceName}>
+              <option value="">Sin interfaz</option>
+              {endpointInterfaces.map((networkInterface) => <option key={networkInterface.id} value={networkInterface.name}>{networkInterface.name} - {networkInterface.status}</option>)}
+            </select></label>
+            <label>IP<select onChange={(event) => setEndpointForm((current) => ({ ...current, ipAddress: event.target.value }))} value={endpointForm.ipAddress}>
+              <option value="">Sin IP</option>
+              {ips.map((ip) => <option key={ip.id} value={ip.address}>{ip.address} - {ip.device ?? ip.site}</option>)}
+            </select></label>
+            <label>Circuito<select onChange={(event) => setEndpointForm((current) => ({ ...current, circuitCode: event.target.value }))} value={endpointForm.circuitCode}>
+              <option value="">Sin circuito</option>
+              {circuits.map((circuit) => <option key={circuit.id} value={circuit.code}>{circuit.code} - {circuit.status}</option>)}
+            </select></label>
+            <button disabled={!selectedService || !endpointForm.role} type="submit">Agregar endpoint</button>
+            <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+          </form>
+        </div>
+
+        <div className="panel">
+          <div className="panelHeader"><div><p className="eyebrow">Operacion</p><h2>Edicion y retiro controlado</h2></div></div>
+          {selectedService && (
+            <form className="quickForm" onSubmit={updateService}>
+              <label className="wideField">Servicio<select onChange={(event) => setSelectedServiceCode(event.target.value)} value={selectedService.code}>
+                {services.map((service) => <option key={service.id} value={service.code}>{service.code} - {service.status}</option>)}
+              </select></label>
+              <label>Codigo<input onChange={(event) => setServiceEditForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} value={serviceEditForm.code} /></label>
+              <label>Estado<select onChange={(event) => setServiceEditForm((current) => ({ ...current, status: event.target.value }))} value={serviceEditForm.status}>
+                <option value="active">active</option><option value="degraded">degraded</option><option value="down">down</option><option value="planned">planned</option><option value="retired">retired</option>
+              </select></label>
+              <label className="wideField">Nombre<input onChange={(event) => setServiceEditForm((current) => ({ ...current, name: event.target.value }))} value={serviceEditForm.name} /></label>
+              <label>Tipo<input onChange={(event) => setServiceEditForm((current) => ({ ...current, serviceType: event.target.value }))} value={serviceEditForm.serviceType} /></label>
+              <label>Responsable<input onChange={(event) => setServiceEditForm((current) => ({ ...current, ownerTeam: event.target.value }))} value={serviceEditForm.ownerTeam} /></label>
+              <label className="wideField">Descripcion<input onChange={(event) => setServiceEditForm((current) => ({ ...current, description: event.target.value }))} value={serviceEditForm.description} /></label>
+              <button disabled={!serviceEditForm.code || !serviceEditForm.name} type="submit">Guardar servicio</button>
+              <button className="dangerButton" onClick={() => void deleteService()} type="button">Eliminar servicio</button>
+            </form>
+          )}
+        </div>
+      </section>
+
+      <section className="circuitWorkbench">
+        <div className="panel">
+          <div className="panelHeader"><div><p className="eyebrow">Endpoints</p><h2>Editar asociacion existente</h2></div></div>
+          {selectedEndpoint ? (
+            <form className="quickForm" onSubmit={updateEndpoint}>
+              <label className="wideField">Endpoint<select onChange={(event) => setSelectedEndpointId(event.target.value)} value={selectedEndpointId}>
+                {endpoints.map((endpoint) => <option key={endpoint.id} value={endpoint.id}>{endpoint.serviceCode} - {endpoint.role} - {endpoint.siteCode ?? "sin sede"}</option>)}
+              </select></label>
+              <label>Servicio<select onChange={(event) => setEndpointEditForm((current) => ({ ...current, serviceCode: event.target.value }))} value={endpointEditForm.serviceCode}>
+                {services.map((service) => <option key={service.id} value={service.code}>{service.code}</option>)}
+              </select></label>
+              <label>Rol<input onChange={(event) => setEndpointEditForm((current) => ({ ...current, role: event.target.value }))} value={endpointEditForm.role} /></label>
+              <label>Sede<select onChange={(event) => setEndpointEditForm((current) => ({ ...current, siteCode: event.target.value, deviceName: "", interfaceName: "" }))} value={endpointEditForm.siteCode}>
+                <option value="">Sin sede</option>
+                {sites.map((site) => <option key={site.id} value={site.code}>{site.code}</option>)}
+              </select></label>
+              <label>Equipo<select onChange={(event) => setEndpointEditForm((current) => ({ ...current, deviceName: event.target.value, interfaceName: "" }))} value={endpointEditForm.deviceName}>
+                <option value="">Sin equipo</option>
+                {devices.filter((device) => !endpointEditForm.siteCode || device.siteCode === endpointEditForm.siteCode).map((device) => <option key={device.id} value={device.name}>{device.name}</option>)}
+              </select></label>
+              <label>Interfaz<select disabled={!selectedEndpointEditDevice} onChange={(event) => setEndpointEditForm((current) => ({ ...current, interfaceName: event.target.value }))} value={endpointEditForm.interfaceName}>
+                <option value="">Sin interfaz</option>
+                {endpointEditInterfaces.map((networkInterface) => <option key={networkInterface.id} value={networkInterface.name}>{networkInterface.name}</option>)}
+              </select></label>
+              <label>IP<select onChange={(event) => setEndpointEditForm((current) => ({ ...current, ipAddress: event.target.value }))} value={endpointEditForm.ipAddress}>
+                <option value="">Sin IP</option>
+                {ips.map((ip) => <option key={ip.id} value={ip.address}>{ip.address}</option>)}
+              </select></label>
+              <label>Circuito<select onChange={(event) => setEndpointEditForm((current) => ({ ...current, circuitCode: event.target.value }))} value={endpointEditForm.circuitCode}>
+                <option value="">Sin circuito</option>
+                {circuits.map((circuit) => <option key={circuit.id} value={circuit.code}>{circuit.code}</option>)}
+              </select></label>
+              <button disabled={!endpointEditForm.serviceCode || !endpointEditForm.role} type="submit">Guardar endpoint</button>
+              <button className="dangerButton" onClick={() => void deleteEndpoint()} type="button">Eliminar endpoint</button>
+              <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+            </form>
+          ) : (
+            <p className="mutedText">Aun no hay endpoints de servicio documentados.</p>
+          )}
+        </div>
+
+        <div className="panel">
+          <div className="panelHeader"><div><p className="eyebrow">Contexto</p><h2>{selectedService?.name ?? "Servicio"}</h2></div></div>
+          <DataTable
+            columns={["Rol", "Sede", "Equipo", "Interfaz", "IP", "Circuito"]}
+            rows={selectedEndpoints.map((endpoint) => [
+              endpoint.role,
+              endpoint.siteCode ?? "N/D",
+              endpoint.device ?? "N/D",
+              endpoint.interface ?? "N/D",
+              endpoint.ipAddress ?? "N/D",
+              endpoint.circuitCode ?? "N/D"
+            ])}
+          />
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panelHeader"><div><p className="eyebrow">Inventario</p><h2>Servicios tecnicos documentados</h2></div></div>
+        <DataTable
+          columns={["Codigo", "Nombre", "Tipo", "Estado", "Responsable", "Endpoints", "Sedes"]}
+          statusColumnIndex={3}
+          rows={services.map((service) => [
+            service.code,
+            service.name,
+            service.serviceType,
+            service.status,
+            service.ownerTeam ?? "N/D",
+            String(service.endpointCount),
+            String(service.siteCount)
+          ])}
+        />
       </section>
     </ModulePage>
   );

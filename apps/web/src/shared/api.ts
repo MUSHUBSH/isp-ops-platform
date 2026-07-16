@@ -283,6 +283,29 @@ export type CircuitEndpoint = {
   demarcation: string | null;
 };
 
+export type ServiceRecord = {
+  id: string;
+  code: string;
+  name: string;
+  serviceType: string;
+  status: string;
+  ownerTeam: string | null;
+  description: string | null;
+  endpointCount: number;
+  siteCount: number;
+};
+
+export type ServiceEndpoint = {
+  id: string;
+  serviceCode: string;
+  role: string;
+  siteCode: string | null;
+  device: string | null;
+  interface: string | null;
+  ipAddress: string | null;
+  circuitCode: string | null;
+};
+
 export type RackView = {
   id: string;
   siteCode: string;

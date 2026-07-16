@@ -13,6 +13,7 @@ INSERT INTO permissions (code, description) VALUES
   ('ipam.write', 'Administrar IPAM'),
   ('inventory.write', 'Administrar inventario'),
   ('circuits.write', 'Administrar circuitos'),
+  ('services.write', 'Administrar servicios tecnicos'),
   ('providers.write', 'Administrar proveedores'),
   ('sites.write', 'Administrar sedes'),
   ('documentation.write', 'Administrar documentos y evidencias'),
@@ -254,6 +255,32 @@ INSERT INTO circuit_endpoints (circuit_id, site_id, device_id, interface_id, lab
 SELECT c.id, s.id, d.id, i.id, 'Z', 'PE-AQP-01 ether1'
 FROM circuits c, sites s, devices d, interfaces i
 WHERE c.code = 'TR-LIM-ARE-10G' AND s.code = 'AQP-POP' AND d.name = 'PE-AQP-01' AND i.device_id = d.id AND i.name = 'ether1'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO services (code, name, service_type, status, owner_team, description) VALUES
+  ('SVC-BGP-EDGE', 'BGP edge y transito IP', 'routing', 'active', 'infra', 'Servicio de borde BGP, loopbacks, transito y salida internacional'),
+  ('SVC-TRANSPORTE-SUR', 'Transporte regional sur', 'transport', 'degraded', 'noc', 'Backbone Arequipa, La Joya, Majes y sedes derivadas'),
+  ('SVC-GESTION-ISP', 'Gestion infraestructura ISP', 'management', 'active', 'infra', 'Acceso de gestion a routers, switches, OLT y energia')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO service_endpoints (service_id, role, site_id, device_id, interface_id, ip_address_id, circuit_id)
+SELECT svc.id, 'router-id', s.id, d.id, i.id, ip.id, NULL
+FROM services svc
+JOIN devices d ON d.name = 'PE-LIMA-01'
+JOIN sites s ON s.id = d.site_id
+JOIN interfaces i ON i.device_id = d.id AND i.name = 'lo0'
+LEFT JOIN ip_addresses ip ON ip.interface_id = i.id
+WHERE svc.code = 'SVC-BGP-EDGE'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO service_endpoints (service_id, role, site_id, device_id, interface_id, ip_address_id, circuit_id)
+SELECT svc.id, 'primary-transport', s.id, d.id, i.id, NULL, c.id
+FROM services svc
+JOIN circuits c ON c.code = 'TR-LIM-ARE-10G'
+JOIN devices d ON d.name = 'PE-AQP-01'
+JOIN sites s ON s.id = d.site_id
+JOIN interfaces i ON i.device_id = d.id AND i.name = 'ether1'
+WHERE svc.code = 'SVC-TRANSPORTE-SUR'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO interface_links (a_interface_id, b_interface_id, circuit_id, link_type, status, capacity_mbps)

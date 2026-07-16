@@ -24,6 +24,8 @@ import type {
   ProviderCapacity,
   ProviderContract,
   RackView,
+  ServiceEndpoint,
+  ServiceRecord,
   Site,
   Transceiver,
   SiteMap,
@@ -119,13 +121,13 @@ export const fallbackSiteMap: SiteMap = {
     { id: "site-quiscay", code: "QUISCAY", name: "Sede Quiscay", type: "access_site", status: "planned", latitude: -16.05, longitude: -72.6, x: 780, y: 355 }
   ],
   links: [
-    { id: "map-aqp-la-joya", a: "AQP-POP", z: "LA-JOYA", status: "active", type: "transport", capacityMbps: 10000, label: "Arequipa <> La Joya" },
-    { id: "map-la-joya-majes", a: "LA-JOYA", z: "MAJES", status: "active", type: "transport", capacityMbps: 10000, label: "La Joya <> Majes" },
-    { id: "map-majes-santa-rita", a: "MAJES", z: "SANTA-RITA", status: "active", type: "distribution", capacityMbps: 2000, label: "Majes <> Santa Rita" },
-    { id: "map-majes-corire", a: "MAJES", z: "CORIRE", status: "active", type: "distribution", capacityMbps: 2000, label: "Majes <> Corire" },
-    { id: "map-majes-aplao", a: "MAJES", z: "APLAO", status: "active", type: "distribution", capacityMbps: 2000, label: "Majes <> Aplao" },
-    { id: "map-corire-escalerillas", a: "CORIRE", z: "ESCALERILLAS", status: "planned", type: "last_mile", capacityMbps: 1000, label: "Corire <> Escalerillas" },
-    { id: "map-aplao-quiscay", a: "APLAO", z: "QUISCAY", status: "planned", type: "last_mile", capacityMbps: 1000, label: "Aplao <> Quiscay" }
+    { id: "map-aqp-la-joya", a: "AQP-POP", z: "LA-JOYA", status: "active", type: "transport", capacityMbps: 10000, label: "Arequipa <> La Joya", providerCode: "ANDEAN", circuitCode: null },
+    { id: "map-la-joya-majes", a: "LA-JOYA", z: "MAJES", status: "active", type: "transport", capacityMbps: 10000, label: "La Joya <> Majes", providerCode: "ANDEAN", circuitCode: null },
+    { id: "map-majes-santa-rita", a: "MAJES", z: "SANTA-RITA", status: "active", type: "distribution", capacityMbps: 2000, label: "Majes <> Santa Rita", providerCode: null, circuitCode: null },
+    { id: "map-majes-corire", a: "MAJES", z: "CORIRE", status: "active", type: "distribution", capacityMbps: 2000, label: "Majes <> Corire", providerCode: null, circuitCode: null },
+    { id: "map-majes-aplao", a: "MAJES", z: "APLAO", status: "active", type: "distribution", capacityMbps: 2000, label: "Majes <> Aplao", providerCode: null, circuitCode: null },
+    { id: "map-corire-escalerillas", a: "CORIRE", z: "ESCALERILLAS", status: "planned", type: "last_mile", capacityMbps: 1000, label: "Corire <> Escalerillas", providerCode: null, circuitCode: null },
+    { id: "map-aplao-quiscay", a: "APLAO", z: "QUISCAY", status: "planned", type: "last_mile", capacityMbps: 1000, label: "Aplao <> Quiscay", providerCode: null, circuitCode: null }
   ]
 };
 
@@ -149,6 +151,17 @@ export const fallbackIps: IpAssignment[] = [
   { id: "ip-pe-lim-loopback", address: "190.0.2.2/32", prefix: "190.0.2.0/24", device: "PE-LIMA-01", interface: "lo0", site: "LIM-CORE", service: "BGP edge", role: "loopback", status: "assigned", description: "Loopback BGP edge" },
   { id: "ip-aqp-uplink", address: "190.0.2.18/32", prefix: "190.0.2.0/24", device: "PE-AQP-01", interface: "lo0", site: "AQP-POP", service: "Regional POP", role: "loopback", status: "assigned", description: "Loopback POP regional" },
   { id: "ip-undoc-001", address: "190.0.2.210/32", prefix: "190.0.2.0/24", device: null, interface: null, site: "LIM-CORE", service: null, role: "unknown", status: "undocumented", description: "Detectada pendiente de documentar" }
+];
+
+export const fallbackServices: ServiceRecord[] = [
+  { id: "svc-bgp-edge", code: "SVC-BGP-EDGE", name: "BGP edge y transito IP", serviceType: "routing", status: "active", ownerTeam: "infra", description: "Servicio de borde BGP, loopbacks y salida internacional", endpointCount: 1, siteCount: 1 },
+  { id: "svc-transporte-sur", code: "SVC-TRANSPORTE-SUR", name: "Transporte regional sur", serviceType: "transport", status: "degraded", ownerTeam: "noc", description: "Backbone Arequipa, La Joya, Majes y sedes derivadas", endpointCount: 1, siteCount: 1 },
+  { id: "svc-gestion-isp", code: "SVC-GESTION-ISP", name: "Gestion infraestructura ISP", serviceType: "management", status: "active", ownerTeam: "infra", description: "Acceso de gestion a routers, switches, OLT y energia", endpointCount: 0, siteCount: 0 }
+];
+
+export const fallbackServiceEndpoints: ServiceEndpoint[] = [
+  { id: "sve-bgp-lim", serviceCode: "SVC-BGP-EDGE", role: "router-id", siteCode: "LIM-CORE", device: "PE-LIMA-01", interface: "lo0", ipAddress: "190.0.2.2/32", circuitCode: null },
+  { id: "sve-transport-aqp", serviceCode: "SVC-TRANSPORTE-SUR", role: "primary-transport", siteCode: "AQP-POP", device: "PE-AQP-01", interface: "ether1", ipAddress: null, circuitCode: "TR-LIM-ARE-10G" }
 ];
 
 export const fallbackCircuits: Circuit[] = [

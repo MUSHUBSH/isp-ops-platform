@@ -26,6 +26,8 @@ import type {
   Provider,
   ProviderCapacity,
   ProviderContract,
+  ServiceEndpoint,
+  ServiceRecord,
   Site,
   Transceiver,
   SiteMap,
@@ -60,6 +62,8 @@ import {
   fallbackProviderContracts,
   fallbackProviders,
   fallbackRackViews,
+  fallbackServiceEndpoints,
+  fallbackServices,
   fallbackSiteMap,
   fallbackSites,
   fallbackTopology,
@@ -76,6 +80,8 @@ type PlatformDataState = {
   providerCapacities: ProviderCapacity[];
   providerContracts: ProviderContract[];
   providers: Provider[];
+  services: ServiceRecord[];
+  serviceEndpoints: ServiceEndpoint[];
   prefixes: Prefix[];
   ips: IpAssignment[];
   circuits: Circuit[];
@@ -116,6 +122,8 @@ export function usePlatformData(): PlatformData {
     providerCapacities: fallbackProviderCapacities,
     providerContracts: fallbackProviderContracts,
     providers: fallbackProviders,
+    services: fallbackServices,
+    serviceEndpoints: fallbackServiceEndpoints,
     prefixes: fallbackPrefixes,
     ips: fallbackIps,
     circuits: fallbackCircuits,
@@ -153,6 +161,8 @@ export function usePlatformData(): PlatformData {
         providersPayload,
         providerContractsPayload,
         providerCapacitiesPayload,
+        servicesPayload,
+        serviceEndpointsPayload,
         prefixesPayload,
         ipsPayload,
         circuitsPayload,
@@ -185,6 +195,8 @@ export function usePlatformData(): PlatformData {
         apiGet<{ providers: Provider[] }>("/providers"),
         apiGet<{ contracts: ProviderContract[] }>("/providers/contracts"),
         apiGet<{ capacities: ProviderCapacity[] }>("/physical/provider-capacities"),
+        apiGet<{ services: ServiceRecord[] }>("/services"),
+        apiGet<{ endpoints: ServiceEndpoint[] }>("/services/endpoints"),
         apiGet<{ prefixes: Prefix[] }>("/ipam/prefixes"),
         apiGet<{ addresses: IpAssignment[] }>("/ipam/addresses"),
         apiGet<{ circuits: Circuit[] }>("/circuits"),
@@ -227,6 +239,8 @@ export function usePlatformData(): PlatformData {
           providerCapacities: providerCapacitiesPayload.capacities,
           providerContracts: providerContractsPayload.contracts,
           providers: providersPayload.providers,
+          services: servicesPayload.services,
+          serviceEndpoints: serviceEndpointsPayload.endpoints,
           prefixes: prefixesPayload.prefixes,
           ips: ipsPayload.addresses,
           circuits: circuitsPayload.circuits,
