@@ -11,6 +11,7 @@ Este repositorio nace como monorepo API-first:
 - `docs`: decisiones de arquitectura y modelo.
 - `docs/api-surface.md`: catalogo actual de endpoints implementados.
 - `docs/operational-playbook.md`: orden recomendado para cargar datos reales.
+- `docs/roadmap.md`: fases pendientes hacia V1 operativa y version avanzada.
 
 Estado: prototipo operativo local para documentacion, IPAM, servicios, inventario, topologia y NOC.
 
