@@ -189,6 +189,12 @@ export function App() {
           </div>
           <div className="topbarActions">
             <span className={`apiState ${data.apiState}`}>{data.apiState === "live" ? "API live" : "demo local"}</span>
+            <span
+              className={`dbState ${data.apiHealth?.database.connected ? "live" : "fallback"}`}
+              title={data.apiHealth ? `API mode: ${data.apiHealth.mode}` : "La web esta usando datos demo"}
+            >
+              {data.apiHealth?.database.connected ? "PostgreSQL conectado" : data.apiHealth?.mode === "demo" ? "Demo sin DB" : "DB offline"}
+            </span>
             {data.currentUser && (
               <span className="identityBadge" title={data.currentUser.permissions.join(", ")}>
                 <strong>{data.currentUser.displayName}</strong>

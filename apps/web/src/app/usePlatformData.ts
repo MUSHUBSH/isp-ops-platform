@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
   Alert,
+  ApiHealth,
   AuditEvent,
   BackupSummary,
   ChangeRequest,
@@ -104,6 +105,7 @@ type PlatformDataState = {
   backupSummary: BackupSummary;
   changes: ChangeRequest[];
   currentUser: CurrentUser | null;
+  apiHealth: ApiHealth | null;
   apiState: "live" | "fallback";
 };
 
@@ -146,12 +148,14 @@ export function usePlatformData(): PlatformData {
     backupSummary: fallbackBackupSummary,
     changes: fallbackChanges,
     currentUser: null,
+    apiHealth: null,
     apiState: "fallback"
   });
 
   const load = useCallback(async (cancelledRef?: { cancelled: boolean }) => {
     try {
       const [
+        health,
         noc,
         alertsPayload,
         maintenancePayload,
@@ -186,6 +190,7 @@ export function usePlatformData(): PlatformData {
         changesPayload,
         mePayload
       ] = await Promise.all([
+        apiGet<ApiHealth>("/health"),
         apiGet<NocSummary>("/noc/summary"),
         apiGet<{ alerts: Alert[] }>("/monitoring/alerts"),
         apiGet<{ maintenanceWindows: MaintenanceWindow[] }>("/monitoring/maintenance-windows"),
@@ -263,12 +268,13 @@ export function usePlatformData(): PlatformData {
           backupSummary,
           changes: changesPayload.changes,
           currentUser: mePayload.user,
+          apiHealth: health,
           apiState: "live"
         });
       }
     } catch {
       if (!cancelledRef?.cancelled) {
-        setData((current) => ({ ...current, apiState: "fallback" }));
+        setData((current) => ({ ...current, apiHealth: null, apiState: "fallback" }));
       }
     }
   }, []);

@@ -457,6 +457,16 @@ export type CurrentUser = {
   siteScopes: string[];
 };
 
+export type ApiHealth = {
+  ok: boolean;
+  service: string;
+  mode: "postgres" | "demo";
+  database: {
+    mode: "postgres" | "demo";
+    connected: boolean;
+  };
+};
+
 export type ChangeRequest = {
   id: string;
   title: string;
