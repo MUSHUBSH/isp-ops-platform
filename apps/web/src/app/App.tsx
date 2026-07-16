@@ -301,6 +301,9 @@ export function App() {
 }
 
 function NocView({ data }: { data: ReturnType<typeof usePlatformData> }) {
+  const degradedServices = data.services.filter((service) => service.status === "degraded" || service.status === "down").length;
+  const servicesWithoutEndpoints = data.services.filter((service) => service.endpointCount === 0).length;
+
   return (
     <>
       <section className="nocHeader">
@@ -318,6 +321,7 @@ function NocView({ data }: { data: ReturnType<typeof usePlatformData> }) {
         <Metric label="Alertas criticas" value={String(data.noc.activeAlerts.critical)} tone="critical" />
         <Metric label="Sedes degradadas" value={String(data.noc.sites.degraded)} tone="warning" />
         <Metric label="Circuitos caidos" value={String(data.noc.circuits.down)} tone="critical" />
+        <Metric label="Servicios degradados" value={String(degradedServices)} tone={degradedServices > 0 ? "warning" : "neutral"} />
         <Metric label="IPs sin contexto" value={String(data.noc.ipam.undocumentedIps)} tone="warning" />
       </section>
 
@@ -349,6 +353,31 @@ function NocView({ data }: { data: ReturnType<typeof usePlatformData> }) {
               </article>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panelHeader">
+          <div>
+            <p className="eyebrow">Servicios</p>
+            <h2>Riesgo operativo</h2>
+          </div>
+          <Layers3 size={20} />
+        </div>
+        <div className="compactList">
+          {data.services.filter((service) => service.status !== "active").slice(0, 6).map((service) => (
+            <article key={service.id}>
+              <strong>{service.code}</strong>
+              <span>{service.name} - {service.status} - {service.endpointCount} endpoints</span>
+            </article>
+          ))}
+          {servicesWithoutEndpoints > 0 && (
+            <article>
+              <strong>{servicesWithoutEndpoints} sin endpoints</strong>
+              <span>Completar trazabilidad sede/equipo/IP/circuito</span>
+            </article>
+          )}
+          {degradedServices === 0 && servicesWithoutEndpoints === 0 && <span className="mutedText">Servicios sin riesgo visible.</span>}
         </div>
       </section>
 
