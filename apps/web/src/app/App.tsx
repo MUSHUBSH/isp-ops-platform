@@ -225,6 +225,8 @@ export function App() {
             powerFeeds={data.powerFeeds}
             prefixes={data.prefixes}
             racks={data.racks}
+            serviceEndpoints={data.serviceEndpoints}
+            services={data.services}
             siteMap={data.siteMap}
             sites={data.sites}
           />
@@ -1119,6 +1121,8 @@ function SitesView({
   powerFeeds = [],
   prefixes = [],
   racks = [],
+  serviceEndpoints = [],
+  services = [],
   siteMap,
   sites
 }: {
@@ -1131,6 +1135,8 @@ function SitesView({
   powerFeeds?: PowerFeed[];
   prefixes?: Prefix[];
   racks?: RackView[];
+  serviceEndpoints?: ServiceEndpoint[];
+  services?: ServiceRecord[];
   siteMap?: SiteMap;
   sites: Site[];
 }) {
@@ -1171,6 +1177,10 @@ function SitesView({
   const selectedPowerFeeds = selectedSite ? powerFeeds.filter((feed) => feed.siteCode === selectedSite.code) : [];
   const selectedFiberSpans = selectedSite ? fiberSpans.filter((span) => span.aSite === selectedSite.code || span.zSite === selectedSite.code) : [];
   const selectedMapLinks = selectedSite ? siteMap?.links.filter((link) => link.a === selectedSite.code || link.z === selectedSite.code) ?? [] : [];
+  const selectedServiceEndpoints = selectedSite ? serviceEndpoints.filter((endpoint) => endpoint.siteCode === selectedSite.code) : [];
+  const selectedServices = selectedServiceEndpoints
+    .map((endpoint) => services.find((service) => service.code === endpoint.serviceCode))
+    .filter((service): service is ServiceRecord => Boolean(service));
   const selectedIncidentText = selectedSite ? `${selectedSite.code} ${selectedSite.name}`.toLowerCase() : "";
   const selectedIncidents = selectedSite
     ? incidents.filter((incident) => {
@@ -1343,6 +1353,7 @@ function SitesView({
             <Metric label="Equipos" value={String(selectedDevices.length || selectedSite.devices)} tone="neutral" />
             <Metric label="Circuitos" value={String(selectedCircuits.length || selectedSite.circuits)} tone="neutral" />
             <Metric label="Capacidad" value={`${formatMbps(selectedCapacityMbps)} agregados`} tone="neutral" />
+            <Metric label="Servicios" value={String(selectedServices.length)} tone="neutral" />
             <Metric label="Incidencias" value={String(selectedIncidents.length || selectedSite.incidents)} tone={(selectedIncidents.length || selectedSite.incidents) > 0 ? "warning" : "neutral"} />
             <Metric label="Racks / RU" value={`${selectedRacks.length} / ${selectedRackUtilization}U`} tone="neutral" />
             <Metric label="Energia" value={`${selectedPowerLoad}W / ${selectedPowerCapacity}W`} tone={selectedPowerCapacity > 0 && selectedPowerLoad / selectedPowerCapacity > 0.8 ? "warning" : "neutral"} />
@@ -1394,6 +1405,21 @@ function SitesView({
                   </article>
                 ))}
                 {selectedIncidents.length === 0 && <span className="mutedText">Sin incidencias relacionadas</span>}
+              </div>
+            </div>
+            <div>
+              <p className="eyebrow">Servicios en la sede</p>
+              <div className="compactList">
+                {selectedServiceEndpoints.slice(0, 8).map((endpoint) => {
+                  const service = services.find((item) => item.code === endpoint.serviceCode);
+                  return (
+                    <article key={endpoint.id}>
+                      <strong>{endpoint.serviceCode}</strong>
+                      <span>{service?.name ?? endpoint.role} / {endpoint.role} / {endpoint.device ?? "sin equipo"} {endpoint.interface ?? ""}</span>
+                    </article>
+                  );
+                })}
+                {selectedServiceEndpoints.length === 0 && <span className="mutedText">Sin servicios asociados</span>}
               </div>
             </div>
             <div>

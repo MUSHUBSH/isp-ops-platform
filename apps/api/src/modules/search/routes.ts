@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { circuits, devices, interfaces, ipAssignments, prefixes, providers, sites } from "../../shared/demo-data.js";
+import { circuits, devices, interfaces, ipAssignments, prefixes, providers, services, sites } from "../../shared/demo-data.js";
 
 export async function registerSearchRoutes(app: FastifyInstance) {
   app.get("/search", async (request) => {
@@ -24,6 +24,11 @@ export async function registerSearchRoutes(app: FastifyInstance) {
         type: "ip",
         label: item.address,
         context: `${item.device ?? "sin equipo"} - ${item.interface ?? "sin interfaz"} - ${item.service ?? "sin servicio"}`
+      })),
+      ...services.map((item) => ({
+        type: "service",
+        label: item.code,
+        context: `${item.name} - ${item.serviceType} - ${item.status}`
       })),
       ...circuits.map((item) => ({
         type: "circuit",

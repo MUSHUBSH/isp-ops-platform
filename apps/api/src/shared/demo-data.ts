@@ -414,6 +414,31 @@ export const ipAssignments = [
   }
 ];
 
+export const services = [
+  {
+    id: "svc-bgp-edge",
+    code: "SVC-BGP-EDGE",
+    name: "BGP edge y transito IP",
+    serviceType: "routing",
+    status: "active",
+    ownerTeam: "infra",
+    description: "Servicio de borde BGP, loopbacks, transito y salida internacional",
+    endpointCount: 1,
+    siteCount: 1
+  },
+  {
+    id: "svc-transporte-sur",
+    code: "SVC-TRANSPORTE-SUR",
+    name: "Transporte regional sur",
+    serviceType: "transport",
+    status: "degraded",
+    ownerTeam: "noc",
+    description: "Backbone Arequipa, La Joya, Majes y sedes derivadas",
+    endpointCount: 1,
+    siteCount: 1
+  }
+];
+
 export const circuits = [
   {
     id: "ckt-lim-aqp-10g",
