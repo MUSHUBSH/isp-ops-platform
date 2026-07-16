@@ -10,6 +10,7 @@ Este repositorio nace como monorepo API-first:
 - `packages/contracts`: contrato OpenAPI.
 - `docs`: decisiones de arquitectura y modelo.
 - `docs/api-surface.md`: catalogo actual de endpoints implementados.
+- `docs/operational-playbook.md`: orden recomendado para cargar datos reales.
 
 Estado: prototipo operativo local para documentacion, IPAM, servicios, inventario, topologia y NOC.
 
@@ -52,6 +53,8 @@ pnpm db:psql     # abre psql dentro del contenedor
 ```
 
 Guia completa: `docs/local-first.md`.
+
+Para empezar a cargar datos reales sin romper relaciones, sigue `docs/operational-playbook.md`.
 
 ## Base de datos
 
