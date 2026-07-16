@@ -202,7 +202,13 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
   });
 
   app.delete("/sites/:code/racks/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const { code, id } = request.params as { code: string; id: string };
+    const before = ((await listRacksBySiteFromDb(code)) ?? rackViews.filter((rack) => rack.siteCode === code)).find((rack) => rack.id === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Rack not found" });
+    }
+
     const deleted = await deleteRackInDb(id);
 
     if (!deleted) {
@@ -214,6 +220,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "rack.deleted",
       objectType: "rack",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion de rack"
     });
 
@@ -283,7 +290,13 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
   });
 
   app.delete("/sites/:code/power-assets/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const { code, id } = request.params as { code: string; id: string };
+    const before = ((await listPowerAssetsBySiteFromDb(code)) ?? powerAssets.filter((asset) => asset.siteCode === code)).find((asset) => asset.id === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Power asset not found" });
+    }
+
     const deleted = await deletePowerAssetInDb(id);
 
     if (!deleted) {
@@ -295,6 +308,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "power_asset.deleted",
       objectType: "power_asset",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion de activo electrico"
     });
 
@@ -354,7 +368,13 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
   });
 
   app.delete("/sites/:code/power-feeds/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const { code, id } = request.params as { code: string; id: string };
+    const before = ((await listPowerFeedsBySiteFromDb(code)) ?? powerFeeds.filter((feed) => feed.siteCode === code)).find((feed) => feed.id === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Power feed not found" });
+    }
+
     const deleted = await deletePowerFeedInDb(id);
 
     if (!deleted) {
@@ -366,6 +386,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "power_feed.deleted",
       objectType: "power_feed",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion de alimentacion electrica"
     });
 
@@ -429,6 +450,12 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
 
   app.delete("/inventory/devices/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const before = ((await listDevicesFromDb()) ?? devices).find((device) => device.id === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Device not found" });
+    }
+
     const deleted = await deleteDeviceInDb(id);
 
     if (!deleted) {
@@ -440,6 +467,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "device.deleted",
       objectType: "device",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion segura de equipo"
     });
 
@@ -529,6 +557,12 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
 
   app.delete("/inventory/interfaces/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const before = ((await listInterfacesFromDb()) ?? interfaces).find((networkInterface) => networkInterface.id === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Interface not found" });
+    }
+
     const deleted = await deleteInterfaceInDb(id);
 
     if (!deleted) {
@@ -540,6 +574,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "interface.deleted",
       objectType: "interface",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion segura de interfaz"
     });
 
@@ -603,6 +638,12 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
 
   app.delete("/inventory/interface-links/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const before = ((await listInterfaceLinksFromDb()) ?? interfaceLinks).find((link) => link.id === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "Interface link not found" });
+    }
+
     const deleted = await deleteInterfaceLinkInDb(id);
 
     if (!deleted) {
@@ -614,6 +655,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       action: "interface_link.deleted",
       objectType: "interface_link",
       objectId: deleted.id,
+      beforeData: before,
       reason: "Eliminacion de enlace entre interfaces"
     });
 
