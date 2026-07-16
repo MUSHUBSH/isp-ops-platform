@@ -6735,6 +6735,10 @@ function HistoryView({ audit }: { audit: AuditEvent[] }) {
       && (!filters.objectType || event.objectType === filters.objectType)
       && (!filters.query || haystack.includes(filters.query.toLowerCase()));
   });
+  const createdEvents = filteredAudit.filter((event) => event.action.includes("created")).length;
+  const updatedEvents = filteredAudit.filter((event) => event.action.includes("updated") || event.action.includes("acknowledged") || event.action.includes("approved")).length;
+  const deletedEvents = filteredAudit.filter((event) => event.action.includes("deleted")).length;
+  const latestActor = filteredAudit[0]?.actor ?? "sin eventos";
 
   return (
     <ModulePage eyebrow="Historial" title="Trazabilidad de cambios operativos">
@@ -6755,19 +6759,19 @@ function HistoryView({ audit }: { audit: AuditEvent[] }) {
           </form>
         </div>
         <section className="metricGrid compactMetrics">
-          <Metric label="Eventos" value={String(audit.length)} tone="neutral" />
-          <Metric label="Filtrados" value={String(filteredAudit.length)} tone="neutral" />
-          <Metric label="Tipos" value={String(objectTypes.length)} tone="neutral" />
-          <Metric label="Acciones" value={String(actions.length)} tone="neutral" />
+          <Metric label="Altas" value={String(createdEvents)} tone="neutral" />
+          <Metric label="Cambios" value={String(updatedEvents)} tone="warning" />
+          <Metric label="Borrados" value={String(deletedEvents)} tone={deletedEvents > 0 ? "critical" : "neutral"} />
+          <Metric label="Ultimo actor" value={latestActor} tone="neutral" />
         </section>
       </section>
       <DataTable
         columns={["Accion", "Objeto", "Tipo", "Actor", "Motivo", "Fecha"]}
         statusColumnIndex={undefined}
         rows={filteredAudit.map((event) => [
-          event.action,
+          formatAuditAction(event.action),
           event.objectLabel,
-          event.objectType,
+          formatAuditObjectType(event.objectType),
           event.actor,
           event.reason ?? "sin motivo",
           new Date(event.at).toLocaleString()
@@ -6775,6 +6779,34 @@ function HistoryView({ audit }: { audit: AuditEvent[] }) {
       />
     </ModulePage>
   );
+}
+
+function formatAuditAction(action: string) {
+  const [domain, ...rest] = action.split(".");
+  const verb = rest.at(-1) ?? domain;
+  const object = rest.length > 1 ? rest.slice(0, -1).join(" ") : domain;
+  const verbLabels: Record<string, string> = {
+    acknowledged: "ACK",
+    approved: "Aprobado",
+    created: "Alta",
+    deleted: "Borrado",
+    updated: "Actualizacion",
+    status_updated: "Cambio de estado"
+  };
+
+  return `${verbLabels[verb] ?? titleCase(verb)} - ${titleCase(object.replaceAll("_", " "))}`;
+}
+
+function formatAuditObjectType(objectType: string) {
+  return titleCase(objectType.replaceAll("_", " "));
+}
+
+function titleCase(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
 }
 
 function PlaceholderView({ module }: { module: string }) {
