@@ -3965,6 +3965,14 @@ type MapImportPayload = {
 const defaultMapCsvPayload = `SITE,NUEVO-NODO,Nuevo nodo,node,planned,-16.12,-72.52,Referencia de campo
 LINK,MAJES,NUEVO-NODO,distribution,planned,1000,Majes <> Nuevo nodo`;
 
+const defaultDeviceCsvPayload = `# siteCode,name,roleCode,status,managementIp,serialNumber
+AQP-POP,RTR-AQP-02,edge_router,active,10.10.0.2,SN-AQP-002
+MAJES,SW-MAJ-02,switch,planned,,SN-MAJ-002`;
+
+const defaultInterfaceCsvPayload = `# deviceName,name,interfaceType,status,speedMbps,description
+RTR-AQP-02,sfp1,sfp,active,10000,Transporte hacia La Joya
+SW-MAJ-02,ether1,ethernet,planned,1000,Uplink local`;
+
 function validateMapCsv(csv: string) {
   const errors: string[] = [];
   const siteCodes = new Set<string>();
@@ -4053,6 +4061,89 @@ function parseMapCsv(csv: string): MapImportPayload {
   }
 
   return payload;
+}
+
+function parseCsvRows(csv: string) {
+  return csv
+    .split(/\r?\n/)
+    .map((rawLine, index) => ({ cells: rawLine.split(",").map((cell) => cell.trim()), index, line: rawLine.trim() }))
+    .filter((row) => row.line && !row.line.startsWith("#"));
+}
+
+function validateDeviceCsv(csv: string, sites: Site[]) {
+  const errors: string[] = [];
+  const siteCodes = new Set(sites.map((site) => site.code.toUpperCase()));
+
+  parseCsvRows(csv).forEach(({ cells, index }) => {
+    const row = index + 1;
+    const siteCode = cells[0]?.toUpperCase();
+    const name = cells[1];
+
+    if (!siteCode || !name) {
+      errors.push(`Fila ${row}: requiere siteCode y name`);
+    }
+
+    if (siteCode && !siteCodes.has(siteCode)) {
+      errors.push(`Fila ${row}: sede ${siteCode} no existe`);
+    }
+
+    if (name && name.length < 2) {
+      errors.push(`Fila ${row}: nombre demasiado corto`);
+    }
+  });
+
+  return errors;
+}
+
+function parseDeviceCsv(csv: string) {
+  return parseCsvRows(csv).map(({ cells }) => ({
+    siteCode: cells[0]?.toUpperCase(),
+    name: cells[1]?.toUpperCase(),
+    roleCode: cells[2] || "edge_router",
+    status: cells[3] || "planned",
+    managementIp: cells[4] || null,
+    serialNumber: cells[5] || null,
+    reason: "Importacion CSV equipos"
+  }));
+}
+
+function validateInterfaceCsv(csv: string, devices: Device[]) {
+  const errors: string[] = [];
+  const deviceNames = new Set(devices.map((device) => device.name.toUpperCase()));
+
+  parseCsvRows(csv).forEach(({ cells, index }) => {
+    const row = index + 1;
+    const deviceName = cells[0]?.toUpperCase();
+    const name = cells[1];
+    const interfaceType = cells[2];
+    const speed = cells[4];
+
+    if (!deviceName || !name || !interfaceType) {
+      errors.push(`Fila ${row}: requiere deviceName, name e interfaceType`);
+    }
+
+    if (deviceName && !deviceNames.has(deviceName)) {
+      errors.push(`Fila ${row}: equipo ${deviceName} no existe`);
+    }
+
+    if (speed && (!Number.isInteger(Number(speed)) || Number(speed) <= 0)) {
+      errors.push(`Fila ${row}: speedMbps debe ser entero positivo`);
+    }
+  });
+
+  return errors;
+}
+
+function parseInterfaceCsv(csv: string) {
+  return parseCsvRows(csv).map(({ cells }) => ({
+    deviceName: cells[0]?.toUpperCase(),
+    name: cells[1],
+    interfaceType: cells[2] || "ethernet",
+    status: cells[3] || "unknown",
+    speedMbps: cells[4] ? Number(cells[4]) : null,
+    description: cells[5] || null,
+    reason: "Importacion CSV interfaces"
+  }));
 }
 
 const defaultMapImportPayload = JSON.stringify({
@@ -4632,6 +4723,9 @@ function RackDiagram({ rack }: { rack: RackView }) {
 function DevicesView({ devices, onReload, sites }: { devices: Device[]; onReload: () => Promise<void>; sites: Site[] }) {
   const [deviceForm, setDeviceForm] = useState({ siteCode: sites[0]?.code ?? "AQP-POP", name: "", roleCode: "edge_router", status: "planned", managementIp: "", serialNumber: "" });
   const [selectedDeviceId, setSelectedDeviceId] = useState(devices[0]?.id ?? "");
+  const [deviceCsvDraft, setDeviceCsvDraft] = useState(defaultDeviceCsvPayload);
+  const [deviceCsvErrors, setDeviceCsvErrors] = useState<string[]>([]);
+  const [deviceImportSummary, setDeviceImportSummary] = useState("");
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId) ?? devices[0];
   const [editForm, setEditForm] = useState({ siteCode: selectedDevice?.siteCode ?? "AQP-POP", name: selectedDevice?.name ?? "", roleCode: selectedDevice?.role ?? "edge_router", status: selectedDevice?.status ?? "planned", managementIp: selectedDevice?.managementIp ?? "" });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -4705,6 +4799,36 @@ function DevicesView({ devices, onReload, sites }: { devices: Device[]; onReload
     }
   }
 
+  function validateDeviceImport() {
+    const errors = validateDeviceCsv(deviceCsvDraft, sites);
+    const rows = parseDeviceCsv(deviceCsvDraft);
+    setDeviceCsvErrors(errors);
+    setDeviceImportSummary(errors.length === 0 ? `${rows.length} equipos listos para importar` : "");
+    return errors;
+  }
+
+  async function importDevicesFromCsv() {
+    const errors = validateDeviceImport();
+    if (errors.length > 0) return;
+
+    setFormState("saving");
+    let imported = 0;
+    let failed = 0;
+
+    for (const device of parseDeviceCsv(deviceCsvDraft)) {
+      try {
+        await apiPost("/inventory/devices", device);
+        imported += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    await onReload();
+    setDeviceImportSummary(`Importados: ${imported} - Fallidos: ${failed}`);
+    setFormState(failed === 0 ? "saved" : "error");
+  }
+
   return (
     <ModulePage eyebrow="Equipos" title="Inventario tecnico por sede y rol">
       <section className="deviceWorkbenchGrid">
@@ -4744,6 +4868,33 @@ function DevicesView({ devices, onReload, sites }: { devices: Device[]; onReload
             <button type="submit">Crear equipo</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
           </form>
+        </div>
+        <div className="panel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">CSV</p>
+              <h2>Importar equipos</h2>
+            </div>
+          </div>
+          <div className="importBox">
+            <textarea onChange={(event) => setDeviceCsvDraft(event.target.value)} spellCheck={false} value={deviceCsvDraft} />
+            <div className="importActions">
+              <button onClick={validateDeviceImport} type="button">Validar CSV</button>
+              <button onClick={() => void importDevicesFromCsv()} type="button">Importar</button>
+              <button onClick={() => {
+                setDeviceCsvDraft(defaultDeviceCsvPayload);
+                setDeviceCsvErrors([]);
+                setDeviceImportSummary("");
+              }} type="button">Ejemplo</button>
+            </div>
+            <p className="importHint">Formato: siteCode, name, roleCode, status, managementIp, serialNumber.</p>
+            {deviceImportSummary && <p className="importHint">{deviceImportSummary}</p>}
+            {deviceCsvErrors.length > 0 && (
+              <div className="csvErrors">
+                {deviceCsvErrors.map((error) => <span key={error}>{error}</span>)}
+              </div>
+            )}
+          </div>
         </div>
         <div className="panel">
           <div className="panelHeader">
@@ -4812,6 +4963,9 @@ function InterfacesView({
 }) {
   const [interfaceForm, setInterfaceForm] = useState({ deviceName: devices[0]?.name ?? "", name: "", interfaceType: "ethernet", status: "unknown", speedMbps: "", description: "" });
   const [selectedInterfaceId, setSelectedInterfaceId] = useState(interfaces[0]?.id ?? "");
+  const [interfaceCsvDraft, setInterfaceCsvDraft] = useState(defaultInterfaceCsvPayload);
+  const [interfaceCsvErrors, setInterfaceCsvErrors] = useState<string[]>([]);
+  const [interfaceImportSummary, setInterfaceImportSummary] = useState("");
   const selectedInterface = interfaces.find((item) => item.id === selectedInterfaceId) ?? interfaces[0];
   const [editForm, setEditForm] = useState({ name: selectedInterface?.name ?? "", interfaceType: selectedInterface?.type ?? "ethernet", status: selectedInterface?.status ?? "unknown", speedMbps: selectedInterface?.speedMbps ? String(selectedInterface.speedMbps) : "", description: selectedInterface?.description ?? "" });
   const [linkForm, setLinkForm] = useState({ aInterfaceId: interfaces[0]?.id ?? "", bInterfaceId: interfaces[1]?.id ?? "", circuitCode: "", linkType: "patchcord", status: "active", capacityMbps: "" });
@@ -4916,6 +5070,36 @@ function InterfacesView({
     }
   }
 
+  function validateInterfaceImport() {
+    const errors = validateInterfaceCsv(interfaceCsvDraft, devices);
+    const rows = parseInterfaceCsv(interfaceCsvDraft);
+    setInterfaceCsvErrors(errors);
+    setInterfaceImportSummary(errors.length === 0 ? `${rows.length} interfaces listas para importar` : "");
+    return errors;
+  }
+
+  async function importInterfacesFromCsv() {
+    const errors = validateInterfaceImport();
+    if (errors.length > 0) return;
+
+    setFormState("saving");
+    let imported = 0;
+    let failed = 0;
+
+    for (const networkInterface of parseInterfaceCsv(interfaceCsvDraft)) {
+      try {
+        await apiPost("/inventory/interfaces", networkInterface);
+        imported += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    await onReload();
+    setInterfaceImportSummary(`Importadas: ${imported} - Fallidas: ${failed}`);
+    setFormState(failed === 0 ? "saved" : "error");
+  }
+
   async function createInterfaceLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!linkForm.aInterfaceId || !linkForm.bInterfaceId || linkForm.aInterfaceId === linkForm.bInterfaceId) {
@@ -5015,6 +5199,33 @@ function InterfacesView({
             <button type="submit">Crear interfaz</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
           </form>
+        </div>
+        <div className="panel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">CSV</p>
+              <h2>Importar interfaces</h2>
+            </div>
+          </div>
+          <div className="importBox">
+            <textarea onChange={(event) => setInterfaceCsvDraft(event.target.value)} spellCheck={false} value={interfaceCsvDraft} />
+            <div className="importActions">
+              <button onClick={validateInterfaceImport} type="button">Validar CSV</button>
+              <button onClick={() => void importInterfacesFromCsv()} type="button">Importar</button>
+              <button onClick={() => {
+                setInterfaceCsvDraft(defaultInterfaceCsvPayload);
+                setInterfaceCsvErrors([]);
+                setInterfaceImportSummary("");
+              }} type="button">Ejemplo</button>
+            </div>
+            <p className="importHint">Formato: deviceName, name, interfaceType, status, speedMbps, description.</p>
+            {interfaceImportSummary && <p className="importHint">{interfaceImportSummary}</p>}
+            {interfaceCsvErrors.length > 0 && (
+              <div className="csvErrors">
+                {interfaceCsvErrors.map((error) => <span key={error}>{error}</span>)}
+              </div>
+            )}
+          </div>
         </div>
         <div className="panel">
           <div className="panelHeader">
