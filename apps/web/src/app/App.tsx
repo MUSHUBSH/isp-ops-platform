@@ -313,6 +313,44 @@ export function App() {
 function NocView({ data }: { data: ReturnType<typeof usePlatformData> }) {
   const degradedServices = data.services.filter((service) => service.status === "degraded" || service.status === "down").length;
   const servicesWithoutEndpoints = data.services.filter((service) => service.endpointCount === 0).length;
+  const devicesWithoutManagementIp = data.devices.filter((device) => !device.managementIp).length;
+  const devicesWithoutInterfaces = data.devices.filter((device) => device.interfaces === 0).length;
+  const interfacesWithoutSpeed = data.interfaces.filter((networkInterface) => !networkInterface.speedMbps).length;
+  const circuitsWithoutInterfaces = data.circuits.filter((circuit) => !circuit.linkedInterfaces).length;
+  const ipsWithoutContext = data.ips.filter((ip) => !ip.device || !ip.interface || !ip.service).length;
+  const documentationChecks = [
+    {
+      label: "Equipos sin IP gestion",
+      value: devicesWithoutManagementIp,
+      detail: "Completar acceso operativo y backup."
+    },
+    {
+      label: "Equipos sin interfaces",
+      value: devicesWithoutInterfaces,
+      detail: "Cargar puertos fisicos, logicos o PON."
+    },
+    {
+      label: "Interfaces sin Mbps",
+      value: interfacesWithoutSpeed,
+      detail: "Documentar velocidad real o negociada."
+    },
+    {
+      label: "Circuitos sin interfaces",
+      value: circuitsWithoutInterfaces,
+      detail: "Vincular endpoints y puertos de transporte."
+    },
+    {
+      label: "Servicios sin endpoints",
+      value: servicesWithoutEndpoints,
+      detail: "Asociar sede, equipo, interfaz, IP y circuito."
+    },
+    {
+      label: "IPs sin contexto total",
+      value: ipsWithoutContext,
+      detail: "Cerrar trazabilidad IPAM hasta servicio."
+    }
+  ];
+  const openDocumentationFindings = documentationChecks.reduce((total, check) => total + check.value, 0);
 
   return (
     <>
@@ -388,6 +426,31 @@ function NocView({ data }: { data: ReturnType<typeof usePlatformData> }) {
             </article>
           )}
           {degradedServices === 0 && servicesWithoutEndpoints === 0 && <span className="mutedText">Servicios sin riesgo visible.</span>}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panelHeader">
+          <div>
+            <p className="eyebrow">Calidad de documentacion</p>
+            <h2>Huecos operativos detectados</h2>
+          </div>
+          <FileClock size={20} />
+        </div>
+        <section className="metricGrid">
+          <Metric label="Hallazgos abiertos" value={String(openDocumentationFindings)} tone={openDocumentationFindings > 0 ? "warning" : "neutral"} />
+          <Metric label="Equipos sin IP" value={String(devicesWithoutManagementIp)} tone={devicesWithoutManagementIp > 0 ? "warning" : "neutral"} />
+          <Metric label="Circuitos incompletos" value={String(circuitsWithoutInterfaces)} tone={circuitsWithoutInterfaces > 0 ? "warning" : "neutral"} />
+          <Metric label="IPs sin contexto" value={String(ipsWithoutContext)} tone={ipsWithoutContext > 0 ? "warning" : "neutral"} />
+        </section>
+        <div className="compactList">
+          {documentationChecks.filter((check) => check.value > 0).map((check) => (
+            <article key={check.label}>
+              <strong>{check.label}: {check.value}</strong>
+              <span>{check.detail}</span>
+            </article>
+          ))}
+          {openDocumentationFindings === 0 && <span className="mutedText">Inventario con trazabilidad operativa completa en los checks principales.</span>}
         </div>
       </section>
 
