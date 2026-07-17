@@ -4875,21 +4875,20 @@ function DevicesView({ devices, onReload, sites }: { devices: Device[]; onReload
     if (errors.length > 0) return;
 
     setFormState("saving");
-    let imported = 0;
-    let failed = 0;
 
-    for (const device of parseDeviceCsv(deviceCsvDraft)) {
-      try {
-        await apiPost("/inventory/devices", device);
-        imported += 1;
-      } catch {
-        failed += 1;
-      }
+    try {
+      const result = await apiPost<{ summary: { created: number; failed: number } }>("/inventory/devices/import", {
+        devices: parseDeviceCsv(deviceCsvDraft),
+        reason: "Importacion CSV equipos desde UI"
+      });
+
+      await onReload();
+      setDeviceImportSummary(`Importados: ${result.summary.created} - Fallidos: ${result.summary.failed}`);
+      setFormState(result.summary.failed === 0 ? "saved" : "error");
+    } catch {
+      setDeviceImportSummary("No se pudo importar el lote de equipos");
+      setFormState("error");
     }
-
-    await onReload();
-    setDeviceImportSummary(`Importados: ${imported} - Fallidos: ${failed}`);
-    setFormState(failed === 0 ? "saved" : "error");
   }
 
   return (
@@ -5146,21 +5145,20 @@ function InterfacesView({
     if (errors.length > 0) return;
 
     setFormState("saving");
-    let imported = 0;
-    let failed = 0;
 
-    for (const networkInterface of parseInterfaceCsv(interfaceCsvDraft)) {
-      try {
-        await apiPost("/inventory/interfaces", networkInterface);
-        imported += 1;
-      } catch {
-        failed += 1;
-      }
+    try {
+      const result = await apiPost<{ summary: { created: number; failed: number } }>("/inventory/interfaces/import", {
+        interfaces: parseInterfaceCsv(interfaceCsvDraft),
+        reason: "Importacion CSV interfaces desde UI"
+      });
+
+      await onReload();
+      setInterfaceImportSummary(`Importadas: ${result.summary.created} - Fallidas: ${result.summary.failed}`);
+      setFormState(result.summary.failed === 0 ? "saved" : "error");
+    } catch {
+      setInterfaceImportSummary("No se pudo importar el lote de interfaces");
+      setFormState("error");
     }
-
-    await onReload();
-    setInterfaceImportSummary(`Importadas: ${imported} - Fallidas: ${failed}`);
-    setFormState(failed === 0 ? "saved" : "error");
   }
 
   async function createInterfaceLink(event: FormEvent<HTMLFormElement>) {

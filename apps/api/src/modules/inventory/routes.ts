@@ -45,6 +45,11 @@ const createDeviceSchema = z.object({
   reason: z.string().max(500).nullable().optional()
 });
 
+const importDevicesSchema = z.object({
+  devices: z.array(createDeviceSchema).min(1).max(500),
+  reason: z.string().max(500).nullable().optional()
+});
+
 const updateDeviceSchema = createDeviceSchema.partial().omit({ reason: true }).extend({
   reason: z.string().max(500).nullable().optional()
 });
@@ -57,6 +62,11 @@ const createInterfaceSchema = z.object({
   speedMbps: z.number().int().positive().nullable().optional(),
   macAddress: z.string().max(32).nullable().optional(),
   description: z.string().max(500).nullable().optional(),
+  reason: z.string().max(500).nullable().optional()
+});
+
+const importInterfacesSchema = z.object({
+  interfaces: z.array(createInterfaceSchema).min(1).max(1000),
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -428,6 +438,50 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
     return reply.code(201).send({ device });
   });
 
+  app.post("/inventory/devices/import", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
+    const parsed = importDevicesSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid device import payload", issues: parsed.error.issues });
+    }
+
+    const created = [];
+    const errors: Array<{ row: number; name: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.devices.entries()) {
+      try {
+        const device = await createDeviceInDb(input);
+
+        if (!device) {
+          errors.push({ row: index + 1, name: input.name, message: "Referenced site/role/model does not exist or PostgreSQL is unavailable" });
+          continue;
+        }
+
+        await recordAuditEvent({
+          actorId: actorId(request),
+          action: "device.imported",
+          objectType: "device",
+          objectId: device.id,
+          afterData: device,
+          reason: input.reason ?? parsed.data.reason ?? "Importacion masiva de equipos"
+        });
+        created.push(device);
+      } catch (error) {
+        errors.push({ row: index + 1, name: input.name, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({
+      summary: {
+        requested: parsed.data.devices.length,
+        created: created.length,
+        failed: errors.length
+      },
+      devices: created,
+      errors
+    });
+  });
+
   app.patch("/inventory/devices/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = updateDeviceSchema.safeParse(request.body);
@@ -537,6 +591,50 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ interface: networkInterface });
+  });
+
+  app.post("/inventory/interfaces/import", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
+    const parsed = importInterfacesSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid interface import payload", issues: parsed.error.issues });
+    }
+
+    const created = [];
+    const errors: Array<{ row: number; name: string; deviceName: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.interfaces.entries()) {
+      try {
+        const networkInterface = await createInterfaceInDb(input);
+
+        if (!networkInterface) {
+          errors.push({ row: index + 1, name: input.name, deviceName: input.deviceName, message: "Referenced device does not exist or PostgreSQL is unavailable" });
+          continue;
+        }
+
+        await recordAuditEvent({
+          actorId: actorId(request),
+          action: "interface.imported",
+          objectType: "interface",
+          objectId: networkInterface.id,
+          afterData: networkInterface,
+          reason: input.reason ?? parsed.data.reason ?? "Importacion masiva de interfaces"
+        });
+        created.push(networkInterface);
+      } catch (error) {
+        errors.push({ row: index + 1, name: input.name, deviceName: input.deviceName, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({
+      summary: {
+        requested: parsed.data.interfaces.length,
+        created: created.length,
+        failed: errors.length
+      },
+      interfaces: created,
+      errors
+    });
   });
 
   app.patch("/inventory/interfaces/:id", { preHandler: requirePermission("inventory.write") }, async (request, reply) => {
