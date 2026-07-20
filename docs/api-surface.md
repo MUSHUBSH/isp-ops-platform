@@ -106,11 +106,13 @@ Permiso de escritura: `inventory.write`.
 | GET | `/inventory/device-roles` | Roles de equipo |
 | GET | `/inventory/devices` | Equipos |
 | POST | `/inventory/devices` | Crear equipo |
+| POST | `/inventory/devices/import` | Importar equipos por lote |
 | PATCH | `/inventory/devices/:id` | Editar equipo |
 | PATCH | `/inventory/devices/:id/placement` | Ubicar equipo en rack/RU/feed |
 | DELETE | `/inventory/devices/:id` | Eliminar equipo sin dependencias |
 | GET | `/inventory/interfaces` | Interfaces |
 | POST | `/inventory/interfaces` | Crear interfaz |
+| POST | `/inventory/interfaces/import` | Importar interfaces por lote |
 | PATCH | `/inventory/interfaces/:id` | Editar interfaz |
 | DELETE | `/inventory/interfaces/:id` | Eliminar interfaz sin dependencias |
 | GET | `/inventory/interface-links` | Enlaces puerto a puerto |
@@ -138,21 +140,27 @@ Permiso de escritura: `physical.write`.
 | --- | --- | --- |
 | GET | `/physical/provider-capacities` | Capacidad contratada/usada por proveedor |
 | POST | `/physical/provider-capacities` | Crear capacidad de proveedor |
+| POST | `/physical/provider-capacities/import` | Importar capacidades de proveedor por lote |
 | PATCH | `/physical/provider-capacities/:id` | Editar capacidad de proveedor |
 | GET | `/physical/fiber-spans` | Tramos de fibra |
 | POST | `/physical/fiber-spans` | Crear tramo de fibra |
+| POST | `/physical/fiber-spans/import` | Importar tramos de fibra por lote |
 | PATCH | `/physical/fiber-spans/:id` | Editar tramo de fibra |
 | GET | `/physical/fiber-strands` | Hilos de fibra |
 | POST | `/physical/fiber-strands` | Crear hilo de fibra |
+| POST | `/physical/fiber-strands/import` | Importar hilos de fibra por lote |
 | PATCH | `/physical/fiber-strands/:id` | Editar hilo de fibra |
 | GET | `/physical/transceivers` | Transceivers |
 | POST | `/physical/transceivers` | Crear transceiver |
+| POST | `/physical/transceivers/import` | Importar transceivers por lote |
 | PATCH | `/physical/transceivers/:id` | Editar transceiver |
 | GET | `/physical/patchcords` | Patchcords puerto a puerto |
 | POST | `/physical/patchcords` | Crear patchcord |
+| POST | `/physical/patchcords/import` | Importar patchcords por lote |
 | PATCH | `/physical/patchcords/:id` | Editar patchcord |
 | GET | `/physical/datacenter-assets` | ODF, bandejas, PDU, OLT, servidores y otros activos |
 | POST | `/physical/datacenter-assets` | Crear activo datacenter |
+| POST | `/physical/datacenter-assets/import` | Importar activos datacenter por lote |
 | PATCH | `/physical/datacenter-assets/:id` | Editar activo datacenter |
 | PATCH | `/physical/:kind/:id/status` | Cambiar estado de registro fisico |
 | DELETE | `/physical/:kind/:id` | Eliminar registro fisico sin dependencias |

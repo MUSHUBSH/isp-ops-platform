@@ -54,6 +54,11 @@ const updateProviderCapacitySchema = providerCapacitySchema.partial().omit({ rea
   reason: nullableString
 });
 
+const importProviderCapacitiesSchema = z.object({
+  capacities: z.array(providerCapacitySchema).min(1).max(500),
+  reason: nullableString
+});
+
 const fiberSpanSchema = z.object({
   code: z.string().trim().min(3).max(80).toUpperCase(),
   aSite: z.string().trim().min(2).max(32).toUpperCase(),
@@ -72,6 +77,11 @@ const updateFiberSpanSchema = fiberSpanSchema.partial().omit({ reason: true }).e
   reason: nullableString
 });
 
+const importFiberSpansSchema = z.object({
+  spans: z.array(fiberSpanSchema).min(1).max(500),
+  reason: nullableString
+});
+
 const fiberStrandSchema = z.object({
   spanCode: z.string().trim().min(3).max(80).toUpperCase(),
   circuitCode: nullableString,
@@ -86,6 +96,11 @@ const fiberStrandSchema = z.object({
 });
 
 const updateFiberStrandSchema = fiberStrandSchema.partial().omit({ reason: true }).extend({
+  reason: nullableString
+});
+
+const importFiberStrandsSchema = z.object({
+  strands: z.array(fiberStrandSchema).min(1).max(2000),
   reason: nullableString
 });
 
@@ -108,6 +123,11 @@ const transceiverSchema = z.object({
 });
 
 const updateTransceiverSchema = transceiverSchema.partial().omit({ reason: true }).extend({
+  reason: nullableString
+});
+
+const importTransceiversSchema = z.object({
+  transceivers: z.array(transceiverSchema).min(1).max(1000),
   reason: nullableString
 });
 
@@ -134,6 +154,11 @@ const updatePatchcordSchema = patchcordSchema.partial().omit({ reason: true }).e
   reason: nullableString
 });
 
+const importPatchcordsSchema = z.object({
+  patchcords: z.array(patchcordSchema).min(1).max(1000),
+  reason: nullableString
+});
+
 const datacenterAssetSchema = z.object({
   siteCode: z.string().trim().min(2).max(32).toUpperCase(),
   rackCode: nullableString,
@@ -147,6 +172,11 @@ const datacenterAssetSchema = z.object({
 });
 
 const updateDatacenterAssetSchema = datacenterAssetSchema.partial().omit({ reason: true }).extend({
+  reason: nullableString
+});
+
+const importDatacenterAssetsSchema = z.object({
+  assets: z.array(datacenterAssetSchema).min(1).max(1000),
   reason: nullableString
 });
 
@@ -235,6 +265,30 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     return reply.code(201).send({ capacity });
   });
 
+  app.post("/physical/provider-capacities/import", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const parsed = importProviderCapacitiesSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.capacities.entries()) {
+      try {
+        const capacity = await createProviderCapacityInDb(input);
+        if (!capacity) {
+          errors.push({ row: index + 1, label: `${input.providerCode} ${input.serviceType}`, message: "Provider/contract invalid or PostgreSQL unavailable" });
+          continue;
+        }
+        await auditCreated(request, "physical.provider_capacity.imported", "provider_capacity", capacity, capacity, input.reason ?? parsed.data.reason);
+        created.push(capacity);
+      } catch (error) {
+        errors.push({ row: index + 1, label: `${input.providerCode} ${input.serviceType}`, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({ summary: { requested: parsed.data.capacities.length, created: created.length, failed: errors.length }, capacities: created, errors });
+  });
+
   app.patch("/physical/provider-capacities/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = updateProviderCapacitySchema.safeParse(request.body);
@@ -254,6 +308,30 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     if (!span) return reply.code(503).send({ message: "PostgreSQL is required to create fiber spans" });
     await auditCreated(request, "physical.fiber_span.created", "fiber_span", span, span, parsed.data.reason);
     return reply.code(201).send({ span });
+  });
+
+  app.post("/physical/fiber-spans/import", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const parsed = importFiberSpansSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.spans.entries()) {
+      try {
+        const span = await createFiberSpanInDb(input);
+        if (!span) {
+          errors.push({ row: index + 1, label: input.code, message: "Sites/provider invalid or PostgreSQL unavailable" });
+          continue;
+        }
+        await auditCreated(request, "physical.fiber_span.imported", "fiber_span", span, span, input.reason ?? parsed.data.reason);
+        created.push(span);
+      } catch (error) {
+        errors.push({ row: index + 1, label: input.code, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({ summary: { requested: parsed.data.spans.length, created: created.length, failed: errors.length }, spans: created, errors });
   });
 
   app.patch("/physical/fiber-spans/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
@@ -277,6 +355,30 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     return reply.code(201).send({ strand });
   });
 
+  app.post("/physical/fiber-strands/import", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const parsed = importFiberStrandsSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.strands.entries()) {
+      try {
+        const strand = await createFiberStrandInDb(input);
+        if (!strand) {
+          errors.push({ row: index + 1, label: `${input.spanCode} hilo ${input.strandNumber}`, message: "Span/circuit invalid or PostgreSQL unavailable" });
+          continue;
+        }
+        await auditCreated(request, "physical.fiber_strand.imported", "fiber_strand", strand, strand, input.reason ?? parsed.data.reason);
+        created.push(strand);
+      } catch (error) {
+        errors.push({ row: index + 1, label: `${input.spanCode} hilo ${input.strandNumber}`, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({ summary: { requested: parsed.data.strands.length, created: created.length, failed: errors.length }, strands: created, errors });
+  });
+
   app.patch("/physical/fiber-strands/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = updateFiberStrandSchema.safeParse(request.body);
@@ -296,6 +398,30 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     if (!transceiver) return reply.code(503).send({ message: "PostgreSQL is required to create transceivers" });
     await auditCreated(request, "physical.transceiver.created", "transceiver", transceiver, transceiver, parsed.data.reason);
     return reply.code(201).send({ transceiver });
+  });
+
+  app.post("/physical/transceivers/import", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const parsed = importTransceiversSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.transceivers.entries()) {
+      try {
+        const transceiver = await createTransceiverInDb(input);
+        if (!transceiver) {
+          errors.push({ row: index + 1, label: `${input.deviceName} ${input.interfaceName}`, message: "Interface invalid or PostgreSQL unavailable" });
+          continue;
+        }
+        await auditCreated(request, "physical.transceiver.imported", "transceiver", transceiver, transceiver, input.reason ?? parsed.data.reason);
+        created.push(transceiver);
+      } catch (error) {
+        errors.push({ row: index + 1, label: `${input.deviceName} ${input.interfaceName}`, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({ summary: { requested: parsed.data.transceivers.length, created: created.length, failed: errors.length }, transceivers: created, errors });
   });
 
   app.patch("/physical/transceivers/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
@@ -319,6 +445,30 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     return reply.code(201).send({ patchcord });
   });
 
+  app.post("/physical/patchcords/import", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const parsed = importPatchcordsSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.patchcords.entries()) {
+      try {
+        const patchcord = await createPatchcordInDb(input);
+        if (!patchcord) {
+          errors.push({ row: index + 1, label: input.code, message: "References invalid or PostgreSQL unavailable" });
+          continue;
+        }
+        await auditCreated(request, "physical.patchcord.imported", "patchcord", patchcord, patchcord, input.reason ?? parsed.data.reason);
+        created.push(patchcord);
+      } catch (error) {
+        errors.push({ row: index + 1, label: input.code, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({ summary: { requested: parsed.data.patchcords.length, created: created.length, failed: errors.length }, patchcords: created, errors });
+  });
+
   app.patch("/physical/patchcords/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = updatePatchcordSchema.safeParse(request.body);
@@ -338,6 +488,30 @@ export async function registerPhysicalRoutes(app: FastifyInstance) {
     if (!asset) return reply.code(503).send({ message: "PostgreSQL is required to create datacenter assets" });
     await auditCreated(request, "physical.datacenter_asset.created", "datacenter_asset", asset, asset, parsed.data.reason);
     return reply.code(201).send({ asset });
+  });
+
+  app.post("/physical/datacenter-assets/import", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
+    const parsed = importDatacenterAssetsSchema.safeParse(request.body);
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.assets.entries()) {
+      try {
+        const asset = await createDatacenterAssetInDb(input);
+        if (!asset) {
+          errors.push({ row: index + 1, label: input.name, message: "Site/rack invalid or PostgreSQL unavailable" });
+          continue;
+        }
+        await auditCreated(request, "physical.datacenter_asset.imported", "datacenter_asset", asset, asset, input.reason ?? parsed.data.reason);
+        created.push(asset);
+      } catch (error) {
+        errors.push({ row: index + 1, label: input.name, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({ summary: { requested: parsed.data.assets.length, created: created.length, failed: errors.length }, assets: created, errors });
   });
 
   app.patch("/physical/datacenter-assets/:id", { preHandler: requirePermission("physical.write") }, async (request, reply) => {
