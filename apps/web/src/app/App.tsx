@@ -2241,6 +2241,10 @@ function DatacenterView({
   transceivers: Transceiver[];
 }) {
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [physicalImportKind, setPhysicalImportKind] = useState<PhysicalImportKind>("fiber-spans");
+  const [physicalCsvDraft, setPhysicalCsvDraft] = useState(defaultPhysicalCsvPayloads["fiber-spans"]);
+  const [physicalCsvErrors, setPhysicalCsvErrors] = useState<string[]>([]);
+  const [physicalImportSummary, setPhysicalImportSummary] = useState("");
   const [capacityForm, setCapacityForm] = useState({
     providerCode: "ANDEAN",
     contractCode: "AF-TRANS-2026",
@@ -2584,6 +2588,43 @@ function DatacenterView({
       await onReload();
       setFormState("saved");
     } catch {
+      setFormState("error");
+    }
+  }
+
+  function changePhysicalImportKind(kind: PhysicalImportKind) {
+    setPhysicalImportKind(kind);
+    setPhysicalCsvDraft(defaultPhysicalCsvPayloads[kind]);
+    setPhysicalCsvErrors([]);
+    setPhysicalImportSummary("");
+  }
+
+  function validatePhysicalImport() {
+    const errors = validatePhysicalCsv(physicalImportKind, physicalCsvDraft);
+    const rows = parsePhysicalCsv(physicalImportKind, physicalCsvDraft);
+    setPhysicalCsvErrors(errors);
+    setPhysicalImportSummary(errors.length === 0 ? `${rows.length} filas listas para importar` : "");
+    return errors;
+  }
+
+  async function importPhysicalFromCsv() {
+    const errors = validatePhysicalImport();
+    if (errors.length > 0) return;
+
+    const meta = physicalImportMeta(physicalImportKind);
+    const rows = parsePhysicalCsv(physicalImportKind, physicalCsvDraft);
+    setFormState("saving");
+
+    try {
+      const result = await apiPost<{ summary: { created: number; failed: number } }>(meta.endpoint, {
+        [meta.bodyKey]: rows,
+        reason: `Importacion CSV ${physicalImportLabels[physicalImportKind]} desde UI`
+      });
+      await onReload();
+      setPhysicalImportSummary(`Importados: ${result.summary.created} - Fallidos: ${result.summary.failed}`);
+      setFormState(result.summary.failed === 0 ? "saved" : "error");
+    } catch {
+      setPhysicalImportSummary("No se pudo importar el lote fisico");
       setFormState("error");
     }
   }
@@ -3135,6 +3176,38 @@ function DatacenterView({
           </form>
         </div>
         <span className={`formState physicalState ${formState}`}>{formStateLabel(formState)}</span>
+      </section>
+      <section className="panel">
+        <div className="panelHeader">
+          <div>
+            <p className="eyebrow">CSV fisico</p>
+            <h2>Importacion masiva de datacenter y planta</h2>
+          </div>
+          <Database size={20} />
+        </div>
+        <div className="importBox">
+          <label>
+            Tipo de inventario
+            <select onChange={(event) => changePhysicalImportKind(event.target.value as PhysicalImportKind)} value={physicalImportKind}>
+              {(Object.keys(physicalImportLabels) as PhysicalImportKind[]).map((kind) => (
+                <option key={kind} value={kind}>{physicalImportLabels[kind]}</option>
+              ))}
+            </select>
+          </label>
+          <textarea onChange={(event) => setPhysicalCsvDraft(event.target.value)} spellCheck={false} value={physicalCsvDraft} />
+          <div className="importActions">
+            <button onClick={validatePhysicalImport} type="button">Validar CSV</button>
+            <button onClick={() => void importPhysicalFromCsv()} type="button">Importar lote</button>
+            <button onClick={() => changePhysicalImportKind(physicalImportKind)} type="button">Ejemplo</button>
+          </div>
+          <p className="importHint">Usa comas simples y evita comas dentro de nombres/notas. Las filas con # se ignoran.</p>
+          {physicalImportSummary && <p className="importHint">{physicalImportSummary}</p>}
+          {physicalCsvErrors.length > 0 && (
+            <div className="csvErrors">
+              {physicalCsvErrors.map((error) => <span key={error}>{error}</span>)}
+            </div>
+          )}
+        </div>
       </section>
       <section className="physicalGrid">
         <div className="panel">
@@ -4207,6 +4280,220 @@ function parseInterfaceCsv(csv: string) {
     description: cells[5] || null,
     reason: "Importacion CSV interfaces"
   }));
+}
+
+type PhysicalImportKind =
+  | "provider-capacities"
+  | "fiber-spans"
+  | "fiber-strands"
+  | "transceivers"
+  | "patchcords"
+  | "datacenter-assets";
+
+const physicalImportLabels: Record<PhysicalImportKind, string> = {
+  "provider-capacities": "Capacidad proveedor",
+  "fiber-spans": "Tramos de fibra",
+  "fiber-strands": "Hilos de fibra",
+  transceivers: "Transceivers",
+  patchcords: "Patchcords",
+  "datacenter-assets": "Activos datacenter"
+};
+
+const defaultPhysicalCsvPayloads: Record<PhysicalImportKind, string> = {
+  "provider-capacities": `# providerCode,contractCode,serviceType,committedMbps,burstableMbps,deliveredMbps,usedMbps,billingMode,status
+ANDEAN,AF-TRANS-2026,transporte regional,10000,,10000,0,commit,active`,
+  "fiber-spans": `# code,aSite,zSite,providerCode,cableType,fiberCount,usedFibers,distanceKm,status,notes
+FO-AQP-MAJ-02,AQP-POP,MAJES,ANDEAN,ADSS monomodo,24,2,78,planned,Ruta troncal`,
+  "fiber-strands": `# spanCode,strandNumber,tubeColor,fiberColor,status,service,circuitCode,aTermination,zTermination
+FO-AQP-MAJ-02,1,azul,azul,used,transporte MAJES,CIR-AQP-MAJ-01,ODF AQP 1/1,ODF MAJ 1/1`,
+  transceivers: `# deviceName,interfaceName,vendor,partNumber,serialNumber,formFactor,speedMbps,wavelengthNm,reachKm,connectorType,fiberMode,txPowerDbm,rxPowerDbm,status
+RTR-AQP-02,sfp1,OEM,SFP-10G-LR,SN-OPT-001,SFP+,10000,1310,10,LC,SM,-2.1,-8.4,active`,
+  patchcords: `# code,aDeviceName,aInterfaceName,zDeviceName,zInterfaceName,circuitCode,aEndpoint,zEndpoint,mediaType,connectorA,connectorZ,lengthMeters,fiberMode,color,status
+PC-AQP-001,RTR-AQP-02,sfp1,ODF-AQP-01,P01,CIR-AQP-MAJ-01,RTR-AQP-02 sfp1,ODF AQP bandeja 1 puerto 1,fiber,LC/UPC,LC/UPC,3,SM,amarillo,active`,
+  "datacenter-assets": `# siteCode,rackCode,name,assetType,units,ports,status,notes
+AQP-POP,RACK-01,ODF AQP 01,odf,2,48,active,ODF troncal transporte`
+};
+
+function optionalNumber(value: string | undefined) {
+  return value ? Number(value) : null;
+}
+
+function physicalImportMeta(kind: PhysicalImportKind) {
+  const meta = {
+    "provider-capacities": {
+      endpoint: "/physical/provider-capacities/import",
+      bodyKey: "capacities",
+      requiredColumns: [0, 2, 3, 5, 7],
+      numericColumns: [3, 4, 5, 6]
+    },
+    "fiber-spans": {
+      endpoint: "/physical/fiber-spans/import",
+      bodyKey: "spans",
+      requiredColumns: [0, 1, 2, 4, 5],
+      numericColumns: [5, 6, 7]
+    },
+    "fiber-strands": {
+      endpoint: "/physical/fiber-strands/import",
+      bodyKey: "strands",
+      requiredColumns: [0, 1],
+      numericColumns: [1]
+    },
+    transceivers: {
+      endpoint: "/physical/transceivers/import",
+      bodyKey: "transceivers",
+      requiredColumns: [0, 1, 2, 3, 5, 6, 9, 10],
+      numericColumns: [6, 7, 8, 11, 12]
+    },
+    patchcords: {
+      endpoint: "/physical/patchcords/import",
+      bodyKey: "patchcords",
+      requiredColumns: [0, 6, 7, 8, 9, 10],
+      numericColumns: [11]
+    },
+    "datacenter-assets": {
+      endpoint: "/physical/datacenter-assets/import",
+      bodyKey: "assets",
+      requiredColumns: [0, 2, 3],
+      numericColumns: [4, 5]
+    }
+  } satisfies Record<PhysicalImportKind, {
+    endpoint: string;
+    bodyKey: string;
+    requiredColumns: number[];
+    numericColumns: number[];
+  }>;
+
+  return meta[kind];
+}
+
+function validatePhysicalCsv(kind: PhysicalImportKind, csv: string) {
+  const errors: string[] = [];
+  const rows = parseCsvRows(csv);
+  const meta = physicalImportMeta(kind);
+
+  rows.forEach(({ cells, index }) => {
+    const row = index + 1;
+    for (const column of meta.requiredColumns) {
+      if (!cells[column]) {
+        errors.push(`Fila ${row}: falta columna requerida ${column + 1}`);
+      }
+    }
+
+    for (const column of meta.numericColumns) {
+      if (cells[column] && Number.isNaN(Number(cells[column]))) {
+        errors.push(`Fila ${row}: columna ${column + 1} debe ser numerica`);
+      }
+    }
+  });
+
+  if (rows.length === 0) {
+    errors.push("No hay filas para importar");
+  }
+
+  return errors;
+}
+
+function parsePhysicalCsv(kind: PhysicalImportKind, csv: string): Record<string, unknown>[] {
+  return parseCsvRows(csv).map(({ cells }) => {
+    if (kind === "provider-capacities") {
+      return {
+        providerCode: cells[0]?.toUpperCase(),
+        contractCode: cells[1] || null,
+        serviceType: cells[2],
+        committedMbps: Number(cells[3]),
+        burstableMbps: optionalNumber(cells[4]),
+        deliveredMbps: Number(cells[5]),
+        usedMbps: optionalNumber(cells[6]),
+        billingMode: cells[7],
+        status: cells[8] || "active",
+        reason: "Importacion CSV fisica"
+      };
+    }
+
+    if (kind === "fiber-spans") {
+      return {
+        code: cells[0]?.toUpperCase(),
+        aSite: cells[1]?.toUpperCase(),
+        zSite: cells[2]?.toUpperCase(),
+        providerCode: cells[3] || null,
+        cableType: cells[4],
+        fiberCount: Number(cells[5]),
+        usedFibers: optionalNumber(cells[6]),
+        distanceKm: optionalNumber(cells[7]),
+        status: cells[8] || "planned",
+        notes: cells[9] || null,
+        reason: "Importacion CSV fisica"
+      };
+    }
+
+    if (kind === "fiber-strands") {
+      return {
+        spanCode: cells[0]?.toUpperCase(),
+        strandNumber: Number(cells[1]),
+        tubeColor: cells[2] || null,
+        fiberColor: cells[3] || null,
+        status: cells[4] || "available",
+        service: cells[5] || null,
+        circuitCode: cells[6] || null,
+        aTermination: cells[7] || null,
+        zTermination: cells[8] || null,
+        reason: "Importacion CSV fisica"
+      };
+    }
+
+    if (kind === "transceivers") {
+      return {
+        deviceName: cells[0]?.toUpperCase(),
+        interfaceName: cells[1],
+        vendor: cells[2],
+        partNumber: cells[3],
+        serialNumber: cells[4] || null,
+        formFactor: cells[5],
+        speedMbps: Number(cells[6]),
+        wavelengthNm: optionalNumber(cells[7]),
+        reachKm: optionalNumber(cells[8]),
+        connectorType: cells[9],
+        fiberMode: cells[10],
+        txPowerDbm: optionalNumber(cells[11]),
+        rxPowerDbm: optionalNumber(cells[12]),
+        status: cells[13] || "active",
+        reason: "Importacion CSV fisica"
+      };
+    }
+
+    if (kind === "patchcords") {
+      return {
+        code: cells[0]?.toUpperCase(),
+        aDeviceName: cells[1] || null,
+        aInterfaceName: cells[2] || null,
+        zDeviceName: cells[3] || null,
+        zInterfaceName: cells[4] || null,
+        circuitCode: cells[5] || null,
+        aEndpoint: cells[6],
+        zEndpoint: cells[7],
+        mediaType: cells[8],
+        connectorA: cells[9],
+        connectorZ: cells[10],
+        lengthMeters: optionalNumber(cells[11]),
+        fiberMode: cells[12] || null,
+        color: cells[13] || null,
+        status: cells[14] || "active",
+        reason: "Importacion CSV fisica"
+      };
+    }
+
+    return {
+      siteCode: cells[0]?.toUpperCase(),
+      rackCode: cells[1] || null,
+      name: cells[2],
+      assetType: cells[3],
+      units: optionalNumber(cells[4]),
+      ports: optionalNumber(cells[5]),
+      status: cells[6] || "active",
+      notes: cells[7] || null,
+      reason: "Importacion CSV fisica"
+    };
+  });
 }
 
 const defaultMapImportPayload = JSON.stringify({
