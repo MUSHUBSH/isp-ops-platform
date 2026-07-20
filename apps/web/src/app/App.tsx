@@ -2428,6 +2428,39 @@ function DatacenterView({
   const usedFibers = fiberSpans.reduce((sum, item) => sum + item.usedFibers, 0);
   const degradedOptics = transceivers.filter((item) => item.status !== "active").length;
   const utilization = totalContracted > 0 ? Math.round((totalUsed / totalContracted) * 100) : 0;
+  const overusedFiberSpans = fiberSpans.filter((span) => span.usedFibers > span.fiberCount).length;
+  const strandsWithoutTermination = fiberStrands.filter((strand) => !strand.aTermination || !strand.zTermination).length;
+  const opticsWithoutPowerReading = transceivers.filter((optic) => optic.txPowerDbm === null || optic.rxPowerDbm === null).length;
+  const patchcordsWithoutDevice = patchcords.filter((patchcord) => !patchcord.aDevice || !patchcord.zDevice).length;
+  const assetsWithoutRack = assets.filter((asset) => !asset.rackCode).length;
+  const physicalDebtChecks = [
+    {
+      label: "Tramos sobreocupados",
+      value: overusedFiberSpans,
+      detail: "Revisar conteo de hilos usados versus capacidad real."
+    },
+    {
+      label: "Hilos sin terminacion completa",
+      value: strandsWithoutTermination,
+      detail: "Completar ODF, bandeja, puerto o punto de entrega A/Z."
+    },
+    {
+      label: "Opticas sin potencia Tx/Rx",
+      value: opticsWithoutPowerReading,
+      detail: "Registrar lectura optica para diagnostico rapido."
+    },
+    {
+      label: "Patchcords sin equipos A/Z",
+      value: patchcordsWithoutDevice,
+      detail: "Cerrar relacion puerto a puerto o ODF a equipo."
+    },
+    {
+      label: "Activos sin rack",
+      value: assetsWithoutRack,
+      detail: "Ubicar ODF, PDU, bandejas y auxiliares en sala/rack."
+    }
+  ];
+  const physicalDebtTotal = physicalDebtChecks.reduce((sum, check) => sum + check.value, 0);
 
   useEffect(() => {
     const currentCapacityExists = capacities.some((capacity) => capacity.id === selectedCapacityId);
@@ -2830,6 +2863,30 @@ function DatacenterView({
         <Metric label="Uso proveedor" value={`${utilization}%`} tone={utilization > 80 ? "warning" : "neutral"} />
         <Metric label="Hilos usados" value={`${usedFibers}/${totalFibers}`} tone="neutral" />
         <Metric label="Opticas alertadas" value={String(degradedOptics)} tone={degradedOptics > 0 ? "warning" : "neutral"} />
+      </section>
+      <section className="panel">
+        <div className="panelHeader">
+          <div>
+            <p className="eyebrow">Deuda fisica</p>
+            <h2>Calidad de documentacion planta/datacenter</h2>
+          </div>
+          <Cable size={20} />
+        </div>
+        <section className="metricGrid compactMetrics">
+          <Metric label="Hallazgos" value={String(physicalDebtTotal)} tone={physicalDebtTotal > 0 ? "warning" : "neutral"} />
+          <Metric label="Patchcords incompletos" value={String(patchcordsWithoutDevice)} tone={patchcordsWithoutDevice > 0 ? "warning" : "neutral"} />
+          <Metric label="Opticas sin lectura" value={String(opticsWithoutPowerReading)} tone={opticsWithoutPowerReading > 0 ? "warning" : "neutral"} />
+          <Metric label="Hilos sin A/Z" value={String(strandsWithoutTermination)} tone={strandsWithoutTermination > 0 ? "warning" : "neutral"} />
+        </section>
+        <div className="compactList">
+          {physicalDebtChecks.filter((check) => check.value > 0).map((check) => (
+            <article key={check.label}>
+              <strong>{check.label}: {check.value}</strong>
+              <span>{check.detail}</span>
+            </article>
+          ))}
+          {physicalDebtTotal === 0 && <span className="mutedText">Planta fisica sin deuda visible en los checks principales.</span>}
+        </div>
       </section>
       <section className="physicalForms">
         <div className="panel">
