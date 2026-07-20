@@ -29,11 +29,12 @@ Prioridad alta:
   - incidencia
   - cambio
 - Crear importadores CSV guiados para:
-  - sedes
-  - equipos
-  - interfaces
-  - IPAM
-  - circuitos
+  - sedes: base implementada
+  - equipos: base implementada
+  - interfaces: base implementada
+  - planta fisica/datacenter: base implementada
+  - IPAM: pendiente
+  - circuitos: pendiente
 - Completar OpenAPI formal desde `docs/api-surface.md`.
 - Agregar pruebas automaticas para repositorios criticos.
 - Documentar backup/restore local con ejemplo de restauracion.
@@ -161,6 +162,6 @@ Ideas clave:
 
 1. Separar vistas grandes de `App.tsx` por modulo.
 2. Mejorar confirmaciones y mensajes de error de eliminacion.
-3. Implementar importador CSV de equipos e interfaces.
+3. Implementar importadores CSV de IPAM y circuitos.
 4. Completar vista detalle de sede con pestañas.
 5. Completar OpenAPI desde `docs/api-surface.md`.

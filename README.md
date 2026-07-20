@@ -11,6 +11,7 @@ Este repositorio nace como monorepo API-first:
 - `docs`: decisiones de arquitectura y modelo.
 - `docs/api-surface.md`: catalogo actual de endpoints implementados.
 - `docs/operational-playbook.md`: orden recomendado para cargar datos reales.
+- `docs/import-templates.md`: plantillas CSV para cargas masivas.
 - `docs/roadmap.md`: fases pendientes hacia V1 operativa y version avanzada.
 
 Estado: prototipo operativo local para documentacion, IPAM, servicios, inventario, topologia y NOC.
@@ -57,7 +58,7 @@ pnpm db:psql     # abre psql dentro del contenedor
 
 Guia completa: `docs/local-first.md`.
 
-Para empezar a cargar datos reales sin romper relaciones, sigue `docs/operational-playbook.md`.
+Para empezar a cargar datos reales sin romper relaciones, sigue `docs/operational-playbook.md` y usa las plantillas de `docs/import-templates.md`.
 
 ## Base de datos
 
