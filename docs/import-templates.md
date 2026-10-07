@@ -36,9 +36,9 @@ MAJES,SW-MAJ-02,switch,planned,,SN-MAJ-002
 ## Interfaces
 
 ```csv
-# deviceName,name,interfaceType,status,speedMbps,description
-RTR-AQP-02,sfp1,sfp,active,10000,Transporte hacia La Joya
-SW-MAJ-02,ether1,ethernet,planned,1000,Uplink local
+# deviceName,name,interfaceType,status,speedMbps,vlan,description
+RTR-AQP-02,sfp1,sfp,active,10000,10,Transporte hacia La Joya
+SW-MAJ-02,ether1,ethernet,planned,1000,100,Uplink local
 ```
 
 ## VLANs

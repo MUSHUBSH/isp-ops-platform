@@ -4422,9 +4422,9 @@ const defaultDeviceCsvPayload = `# siteCode,name,roleCode,status,managementIp,se
 AQP-POP,RTR-AQP-02,edge_router,active,10.10.0.2,SN-AQP-002
 MAJES,SW-MAJ-02,switch,planned,,SN-MAJ-002`;
 
-const defaultInterfaceCsvPayload = `# deviceName,name,interfaceType,status,speedMbps,description
-RTR-AQP-02,sfp1,sfp,active,10000,Transporte hacia La Joya
-SW-MAJ-02,ether1,ethernet,planned,1000,Uplink local`;
+const defaultInterfaceCsvPayload = `# deviceName,name,interfaceType,status,speedMbps,vlan,description
+RTR-AQP-02,sfp1,sfp,active,10000,10,Transporte hacia La Joya
+SW-MAJ-02,ether1,ethernet,planned,1000,100,Uplink local`;
 
 function validateMapCsv(csv: string) {
   const errors: string[] = [];
@@ -4560,7 +4560,20 @@ function parseDeviceCsv(csv: string) {
   }));
 }
 
-function validateInterfaceCsv(csv: string, devices: Device[]) {
+function resolveVlanReference(reference: string | undefined, deviceName: string | undefined, devices: Device[], vlans: Vlan[]) {
+  if (!reference || !deviceName) return null;
+
+  const device = devices.find((item) => item.name.toUpperCase() === deviceName.toUpperCase());
+  const normalizedReference = reference.toUpperCase();
+
+  return vlans.find((vlan) => {
+    const sameSite = !device || vlan.siteCode === "GLOBAL" || vlan.siteCode === device.siteCode;
+    const sameReference = vlan.id === reference || String(vlan.vlanId) === reference || vlan.name.toUpperCase() === normalizedReference;
+    return sameSite && sameReference;
+  }) ?? null;
+}
+
+function validateInterfaceCsv(csv: string, devices: Device[], vlans: Vlan[]) {
   const errors: string[] = [];
   const deviceNames = new Set(devices.map((device) => device.name.toUpperCase()));
 
@@ -4570,6 +4583,7 @@ function validateInterfaceCsv(csv: string, devices: Device[]) {
     const name = cells[1];
     const interfaceType = cells[2];
     const speed = cells[4];
+    const vlanReference = cells.length >= 7 ? cells[5] : "";
 
     if (!deviceName || !name || !interfaceType) {
       errors.push(`Fila ${row}: requiere deviceName, name e interfaceType`);
@@ -4582,19 +4596,24 @@ function validateInterfaceCsv(csv: string, devices: Device[]) {
     if (speed && (!Number.isInteger(Number(speed)) || Number(speed) <= 0)) {
       errors.push(`Fila ${row}: speedMbps debe ser entero positivo`);
     }
+
+    if (vlanReference && !resolveVlanReference(vlanReference, deviceName, devices, vlans)) {
+      errors.push(`Fila ${row}: VLAN ${vlanReference} no existe para la sede del equipo`);
+    }
   });
 
   return errors;
 }
 
-function parseInterfaceCsv(csv: string) {
+function parseInterfaceCsv(csv: string, devices: Device[], vlans: Vlan[]) {
   return parseCsvRows(csv).map(({ cells }) => ({
     deviceName: cells[0]?.toUpperCase(),
     name: cells[1],
     interfaceType: cells[2] || "ethernet",
     status: cells[3] || "unknown",
     speedMbps: cells[4] ? Number(cells[4]) : null,
-    description: cells[5] || null,
+    vlanId: cells.length >= 7 ? resolveVlanReference(cells[5], cells[0], devices, vlans)?.id ?? null : null,
+    description: cells.length >= 7 ? cells[6] || null : cells[5] || null,
     reason: "Importacion CSV interfaces"
   }));
 }
@@ -5845,8 +5864,8 @@ function InterfacesView({
   }
 
   function validateInterfaceImport() {
-    const errors = validateInterfaceCsv(interfaceCsvDraft, devices);
-    const rows = parseInterfaceCsv(interfaceCsvDraft);
+    const errors = validateInterfaceCsv(interfaceCsvDraft, devices, vlans);
+    const rows = parseInterfaceCsv(interfaceCsvDraft, devices, vlans);
     setInterfaceCsvErrors(errors);
     setInterfaceImportSummary(errors.length === 0 ? `${rows.length} interfaces listas para importar` : "");
     return errors;
@@ -5860,7 +5879,7 @@ function InterfacesView({
 
     try {
       const result = await apiPost<{ summary: { created: number; failed: number } }>("/inventory/interfaces/import", {
-        interfaces: parseInterfaceCsv(interfaceCsvDraft),
+        interfaces: parseInterfaceCsv(interfaceCsvDraft, devices, vlans),
         reason: "Importacion CSV interfaces desde UI"
       });
 
@@ -5995,7 +6014,7 @@ function InterfacesView({
                 setInterfaceImportSummary("");
               }} type="button">Ejemplo</button>
             </div>
-            <p className="importHint">Formato: deviceName, name, interfaceType, status, speedMbps, description.</p>
+            <p className="importHint">Formato: deviceName, name, interfaceType, status, speedMbps, vlan, description. La VLAN puede ser numero, nombre o ID.</p>
             {interfaceImportSummary && <p className="importHint">{interfaceImportSummary}</p>}
             {interfaceCsvErrors.length > 0 && (
               <div className="csvErrors">

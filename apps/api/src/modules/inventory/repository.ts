@@ -477,10 +477,26 @@ export async function deleteDeviceInDb(id: string) {
 
 export async function createInterfaceInDb(input: CreateInterfaceInput) {
   const row = await queryOne<InterfaceRow>(
-    `INSERT INTO interfaces (device_id, vlan_id, name, interface_type, status, mac_address, speed_mbps, description)
-     SELECT d.id, $8::uuid, $2, $3, $4, $5::macaddr, $6, $7
-     FROM devices d
-     WHERE d.name = $1
+    `WITH selected_device AS (
+       SELECT id, site_id FROM devices WHERE name = $1
+     ),
+     selected_vlan AS (
+       SELECT v.id
+       FROM vlans v
+       JOIN selected_device d ON v.site_id IS NULL OR v.site_id = d.site_id
+       WHERE v.id = $8::uuid
+     )
+     INSERT INTO interfaces (device_id, vlan_id, name, interface_type, status, mac_address, speed_mbps, description)
+     SELECT d.id,
+            CASE WHEN $8::uuid IS NULL THEN NULL ELSE (SELECT id FROM selected_vlan) END,
+            $2,
+            $3,
+            $4,
+            $5::macaddr,
+            $6,
+            $7
+     FROM selected_device d
+     WHERE $8::uuid IS NULL OR EXISTS (SELECT 1 FROM selected_vlan)
      RETURNING
        id,
        $1::text AS device,
