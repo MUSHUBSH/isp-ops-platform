@@ -38,6 +38,9 @@ type InterfaceRow = {
   status: string;
   speed_mbps: number | null;
   description: string | null;
+  vlan_id: string | null;
+  vlan_name: string | null;
+  vlan_number: number | null;
 };
 
 type LinkRow = {
@@ -122,6 +125,7 @@ export type CreateInterfaceInput = {
   interfaceType: string;
   status?: string;
   speedMbps?: number | null;
+  vlanId?: string | null;
   macAddress?: string | null;
   description?: string | null;
 };
@@ -132,6 +136,7 @@ export type UpdateInterfaceInput = {
   interfaceType?: string;
   status?: string;
   speedMbps?: number | null;
+  vlanId?: string | null;
   description?: string | null;
 };
 
@@ -242,7 +247,10 @@ function mapInterface(row: InterfaceRow) {
     type: row.interface_type,
     status: row.status,
     speedMbps: row.speed_mbps,
-    description: row.description
+    description: row.description,
+    vlanId: row.vlan_id,
+    vlanName: row.vlan_name,
+    vlanNumber: row.vlan_number
   };
 }
 
@@ -339,10 +347,14 @@ export async function listInterfacesFromDb() {
        i.interface_type,
        i.status,
        i.speed_mbps,
-       i.description
+       i.description,
+       i.vlan_id::text,
+       v.name AS vlan_name,
+       v.vlan_id AS vlan_number
      FROM interfaces i
      JOIN devices d ON d.id = i.device_id
      JOIN sites s ON s.id = d.site_id
+     LEFT JOIN vlans v ON v.id = i.vlan_id
      ORDER BY d.name, i.name`
   );
 
@@ -465,8 +477,8 @@ export async function deleteDeviceInDb(id: string) {
 
 export async function createInterfaceInDb(input: CreateInterfaceInput) {
   const row = await queryOne<InterfaceRow>(
-    `INSERT INTO interfaces (device_id, name, interface_type, status, mac_address, speed_mbps, description)
-     SELECT d.id, $2, $3, $4, $5::macaddr, $6, $7
+    `INSERT INTO interfaces (device_id, vlan_id, name, interface_type, status, mac_address, speed_mbps, description)
+     SELECT d.id, $8::uuid, $2, $3, $4, $5::macaddr, $6, $7
      FROM devices d
      WHERE d.name = $1
      RETURNING
@@ -477,7 +489,10 @@ export async function createInterfaceInDb(input: CreateInterfaceInput) {
        interface_type,
        status,
        speed_mbps,
-       description`,
+       description,
+       vlan_id::text,
+       (SELECT v.name FROM vlans v WHERE v.id = interfaces.vlan_id) AS vlan_name,
+       (SELECT v.vlan_id FROM vlans v WHERE v.id = interfaces.vlan_id) AS vlan_number`,
     [
       input.deviceName,
       input.name,
@@ -485,7 +500,8 @@ export async function createInterfaceInDb(input: CreateInterfaceInput) {
       input.status ?? "unknown",
       input.macAddress ?? null,
       input.speedMbps ?? null,
-      input.description ?? null
+      input.description ?? null,
+      input.vlanId ?? null
     ]
   );
 
@@ -499,7 +515,8 @@ export async function updateInterfaceInDb(input: UpdateInterfaceInput) {
          interface_type = COALESCE($3, interface_type),
          status = COALESCE($4, status),
          speed_mbps = $5,
-         description = COALESCE($6, description)
+         description = COALESCE($6, description),
+         vlan_id = $7::uuid
      WHERE i.id = $1::uuid
      RETURNING
        i.id,
@@ -509,8 +526,11 @@ export async function updateInterfaceInDb(input: UpdateInterfaceInput) {
        i.interface_type,
        i.status,
        i.speed_mbps,
-       i.description`,
-    [input.id, input.name ?? null, input.interfaceType ?? null, input.status ?? null, input.speedMbps ?? null, input.description ?? null]
+       i.description,
+       i.vlan_id::text,
+       (SELECT name FROM vlans WHERE id = i.vlan_id) AS vlan_name,
+       (SELECT vlan_id FROM vlans WHERE id = i.vlan_id) AS vlan_number`,
+    [input.id, input.name ?? null, input.interfaceType ?? null, input.status ?? null, input.speedMbps ?? null, input.description ?? null, input.vlanId ?? null]
   );
 
   return row ? mapInterface(row) : null;

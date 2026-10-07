@@ -378,6 +378,9 @@ export type NetworkInterface = {
   status: string;
   speedMbps: number | null;
   description: string | null;
+  vlanId: string | null;
+  vlanName: string | null;
+  vlanNumber: number | null;
 };
 
 export type InterfaceLink = {

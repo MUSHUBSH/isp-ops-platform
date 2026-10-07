@@ -184,9 +184,9 @@ export const fallbackDevices: Device[] = [
 ];
 
 export const fallbackInterfaces: NetworkInterface[] = [
-  { id: "if-pe-lim-lo0", device: "PE-LIMA-01", siteCode: "LIM-CORE", name: "lo0", type: "loopback", status: "active", speedMbps: null, description: "Loopback BGP/router-id" },
-  { id: "if-pe-lim-xe002", device: "PE-LIMA-01", siteCode: "LIM-CORE", name: "xe-0/0/2", type: "ethernet", status: "degraded", speedMbps: 10000, description: "Transporte hacia AQP-POP" },
-  { id: "if-pe-aqp-xe001", device: "PE-AQP-01", siteCode: "AQP-POP", name: "xe-0/0/1", type: "ethernet", status: "down", speedMbps: 10000, description: "Transporte hacia LIM-CORE" }
+  { id: "if-pe-lim-lo0", device: "PE-LIMA-01", siteCode: "LIM-CORE", name: "lo0", type: "loopback", status: "active", speedMbps: null, description: "Loopback BGP/router-id", vlanId: null, vlanName: null, vlanNumber: null },
+  { id: "if-pe-lim-xe002", device: "PE-LIMA-01", siteCode: "LIM-CORE", name: "xe-0/0/2", type: "ethernet", status: "degraded", speedMbps: 10000, description: "Transporte hacia AQP-POP", vlanId: null, vlanName: null, vlanNumber: null },
+  { id: "if-pe-aqp-xe001", device: "PE-AQP-01", siteCode: "AQP-POP", name: "xe-0/0/1", type: "ethernet", status: "down", speedMbps: 10000, description: "Transporte hacia LIM-CORE", vlanId: "vlan-aqp-mgmt", vlanName: "Gestion AQP", vlanNumber: 10 }
 ];
 
 export const fallbackInterfaceLinks: InterfaceLink[] = [

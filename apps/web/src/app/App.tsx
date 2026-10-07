@@ -241,7 +241,7 @@ export function App() {
         {activeModule === "map" && <NetworkMapView siteMap={data.siteMap} />}
         {activeModule === "racks" && <RacksPowerView devices={data.devices} onReload={data.reload} powerAssets={data.powerAssets} racks={data.racks} powerFeeds={data.powerFeeds} sites={data.sites} />}
         {activeModule === "devices" && <DevicesView devices={data.devices} onReload={data.reload} sites={data.sites} />}
-        {activeModule === "interfaces" && <InterfacesView circuits={data.circuits} devices={data.devices} interfaceLinks={data.interfaceLinks} interfaces={data.interfaces} onReload={data.reload} />}
+        {activeModule === "interfaces" && <InterfacesView circuits={data.circuits} devices={data.devices} interfaceLinks={data.interfaceLinks} interfaces={data.interfaces} onReload={data.reload} vlans={data.vlans} />}
         {activeModule === "datacenter" && <DatacenterView assets={data.datacenterAssets} capacities={data.providerCapacities} fiberSpans={data.fiberSpans} fiberStrands={data.fiberStrands} onReload={data.reload} patchcords={data.patchcords} transceivers={data.transceivers} />}
         {activeModule === "circuits" && (
           <CircuitsView
@@ -5722,21 +5722,23 @@ function InterfacesView({
   devices,
   interfaceLinks,
   interfaces,
-  onReload
+  onReload,
+  vlans
 }: {
   circuits: Circuit[];
   devices: Device[];
   interfaceLinks: InterfaceLink[];
   interfaces: NetworkInterface[];
   onReload: () => Promise<void>;
+  vlans: Vlan[];
 }) {
-  const [interfaceForm, setInterfaceForm] = useState({ deviceName: devices[0]?.name ?? "", name: "", interfaceType: "ethernet", status: "unknown", speedMbps: "", description: "" });
+  const [interfaceForm, setInterfaceForm] = useState({ deviceName: devices[0]?.name ?? "", name: "", interfaceType: "ethernet", status: "unknown", speedMbps: "", vlanId: "", description: "" });
   const [selectedInterfaceId, setSelectedInterfaceId] = useState(interfaces[0]?.id ?? "");
   const [interfaceCsvDraft, setInterfaceCsvDraft] = useState(defaultInterfaceCsvPayload);
   const [interfaceCsvErrors, setInterfaceCsvErrors] = useState<string[]>([]);
   const [interfaceImportSummary, setInterfaceImportSummary] = useState("");
   const selectedInterface = interfaces.find((item) => item.id === selectedInterfaceId) ?? interfaces[0];
-  const [editForm, setEditForm] = useState({ name: selectedInterface?.name ?? "", interfaceType: selectedInterface?.type ?? "ethernet", status: selectedInterface?.status ?? "unknown", speedMbps: selectedInterface?.speedMbps ? String(selectedInterface.speedMbps) : "", description: selectedInterface?.description ?? "" });
+  const [editForm, setEditForm] = useState({ name: selectedInterface?.name ?? "", interfaceType: selectedInterface?.type ?? "ethernet", status: selectedInterface?.status ?? "unknown", speedMbps: selectedInterface?.speedMbps ? String(selectedInterface.speedMbps) : "", vlanId: selectedInterface?.vlanId ?? "", description: selectedInterface?.description ?? "" });
   const [linkForm, setLinkForm] = useState({ aInterfaceId: interfaces[0]?.id ?? "", bInterfaceId: interfaces[1]?.id ?? "", circuitCode: "", linkType: "patchcord", status: "active", capacityMbps: "" });
   const [selectedLinkId, setSelectedLinkId] = useState("");
   const selectedLink = interfaceLinks.find((link) => link.id === selectedLinkId);
@@ -5753,6 +5755,7 @@ function InterfacesView({
         interfaceType: selectedInterface.type,
         status: selectedInterface.status,
         speedMbps: selectedInterface.speedMbps ? String(selectedInterface.speedMbps) : "",
+        vlanId: selectedInterface.vlanId ?? "",
         description: selectedInterface.description ?? ""
       });
     }
@@ -5793,10 +5796,11 @@ function InterfacesView({
         interfaceType: interfaceForm.interfaceType,
         status: interfaceForm.status,
         speedMbps: interfaceForm.speedMbps ? Number(interfaceForm.speedMbps) : null,
+        vlanId: interfaceForm.vlanId || null,
         description: interfaceForm.description || null,
         reason: "Alta desde modulo Interfaces"
       });
-      setInterfaceForm((current) => ({ ...current, name: "", speedMbps: "", description: "" }));
+      setInterfaceForm((current) => ({ ...current, name: "", speedMbps: "", vlanId: "", description: "" }));
       await onReload();
       setFormState("saved");
     } catch {
@@ -5815,6 +5819,7 @@ function InterfacesView({
         interfaceType: editForm.interfaceType,
         status: editForm.status,
         speedMbps: editForm.speedMbps ? Number(editForm.speedMbps) : null,
+        vlanId: editForm.vlanId || null,
         description: editForm.description || null,
         reason: "Edicion desde modulo Interfaces"
       });
@@ -5943,7 +5948,7 @@ function InterfacesView({
               <button className={networkInterface.id === selectedInterface?.id ? "deviceListItem active" : "deviceListItem"} key={networkInterface.id} onClick={() => setSelectedInterfaceId(networkInterface.id)} type="button">
                 <strong>{networkInterface.device} {networkInterface.name}</strong>
                 <span>{networkInterface.type} - {networkInterface.siteCode}</span>
-                <small className={`statusText ${networkInterface.status}`}>{networkInterface.status} / {networkInterface.speedMbps ? `${networkInterface.speedMbps} Mbps` : "sin velocidad"}</small>
+                <small className={`statusText ${networkInterface.status}`}>{networkInterface.status} / {networkInterface.speedMbps ? `${networkInterface.speedMbps} Mbps` : "sin velocidad"} / {networkInterface.vlanNumber ? `VLAN ${networkInterface.vlanNumber}` : "sin VLAN"}</small>
               </button>
             ))}
           </div>
@@ -5963,6 +5968,10 @@ function InterfacesView({
             <label>Tipo<InterfaceTypeSelect onChange={(value) => setInterfaceForm((current) => ({ ...current, interfaceType: value }))} value={interfaceForm.interfaceType} /></label>
             <label>Estado<InterfaceStatusSelect onChange={(value) => setInterfaceForm((current) => ({ ...current, status: value }))} value={interfaceForm.status} /></label>
             <label>Mbps<input inputMode="numeric" onChange={(event) => setInterfaceForm((current) => ({ ...current, speedMbps: event.target.value }))} value={interfaceForm.speedMbps} /></label>
+            <label>VLAN<select onChange={(event) => setInterfaceForm((current) => ({ ...current, vlanId: event.target.value }))} value={interfaceForm.vlanId}>
+              <option value="">Sin VLAN</option>
+              {vlans.map((vlan) => <option key={vlan.id} value={vlan.id}>{vlan.siteCode} / VLAN {vlan.vlanId} - {vlan.name}</option>)}
+            </select></label>
             <label className="wideField">Descripcion<input onChange={(event) => setInterfaceForm((current) => ({ ...current, description: event.target.value }))} value={interfaceForm.description} /></label>
             <button type="submit">Crear interfaz</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
@@ -6008,6 +6017,10 @@ function InterfacesView({
               <label>Tipo<InterfaceTypeSelect onChange={(value) => setEditForm((current) => ({ ...current, interfaceType: value }))} value={editForm.interfaceType} /></label>
               <label>Estado<InterfaceStatusSelect onChange={(value) => setEditForm((current) => ({ ...current, status: value }))} value={editForm.status} /></label>
               <label>Mbps<input inputMode="numeric" onChange={(event) => setEditForm((current) => ({ ...current, speedMbps: event.target.value }))} value={editForm.speedMbps} /></label>
+              <label>VLAN<select onChange={(event) => setEditForm((current) => ({ ...current, vlanId: event.target.value }))} value={editForm.vlanId}>
+                <option value="">Sin VLAN</option>
+                {vlans.map((vlan) => <option key={vlan.id} value={vlan.id}>{vlan.siteCode} / VLAN {vlan.vlanId} - {vlan.name}</option>)}
+              </select></label>
               <label className="wideField">Descripcion<input onChange={(event) => setEditForm((current) => ({ ...current, description: event.target.value }))} value={editForm.description} /></label>
               <button type="submit">Guardar interfaz</button>
               <button className="dangerButton" onClick={() => void deleteSelectedInterface()} type="button">Eliminar si no tiene dependencias</button>

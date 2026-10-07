@@ -60,6 +60,7 @@ const createInterfaceSchema = z.object({
   interfaceType: z.string().min(2).max(50),
   status: z.string().min(2).max(40).optional(),
   speedMbps: z.number().int().positive().nullable().optional(),
+  vlanId: z.string().uuid().nullable().optional(),
   macAddress: z.string().max(32).nullable().optional(),
   description: z.string().max(500).nullable().optional(),
   reason: z.string().max(500).nullable().optional()
