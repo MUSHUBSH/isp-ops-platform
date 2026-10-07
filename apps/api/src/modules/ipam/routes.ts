@@ -79,6 +79,11 @@ const importIpsSchema = z.object({
   reason: z.string().max(500).nullable().optional()
 });
 
+const importPrefixesSchema = z.object({
+  prefixes: z.array(createPrefixSchema).min(1).max(1000),
+  reason: z.string().max(500).nullable().optional()
+});
+
 export async function registerIpamRoutes(app: FastifyInstance) {
   app.get("/ipam/prefixes", async () => ({
     prefixes: (await listPrefixesFromDb()) ?? prefixes
@@ -127,6 +132,45 @@ export async function registerIpamRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ prefix });
+  });
+
+  app.post("/ipam/prefixes/import", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
+    const parsed = importPrefixesSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid prefix import payload", issues: parsed.error.issues });
+    }
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.prefixes.entries()) {
+      try {
+        const prefix = await createPrefixInDb(input);
+        if (!prefix) {
+          errors.push({ row: index + 1, label: input.prefix, message: "Referenced site invalid, prefix invalid or PostgreSQL unavailable" });
+          continue;
+        }
+
+        await recordAuditEvent({
+          actorId: actorId(request),
+          action: "prefix.imported",
+          objectType: "prefix",
+          objectId: prefix.id,
+          afterData: prefix,
+          reason: input.reason ?? parsed.data.reason ?? "Importacion masiva de prefijos"
+        });
+        created.push(prefix);
+      } catch (error) {
+        errors.push({ row: index + 1, label: input.prefix, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({
+      summary: { requested: parsed.data.prefixes.length, created: created.length, failed: errors.length },
+      prefixes: created,
+      errors
+    });
   });
 
   app.patch("/ipam/prefixes/:id", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {

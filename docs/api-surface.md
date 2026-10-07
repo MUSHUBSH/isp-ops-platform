@@ -52,6 +52,7 @@ Permiso de escritura: `ipam.write`.
 | --- | --- | --- |
 | GET | `/ipam/prefixes` | Prefijos y bloques |
 | POST | `/ipam/prefixes` | Crear prefijo |
+| POST | `/ipam/prefixes/import` | Importar prefijos por lote |
 | PATCH | `/ipam/prefixes/:id` | Editar prefijo |
 | DELETE | `/ipam/prefixes/:id` | Eliminar prefijo sin dependencias |
 | GET | `/ipam/addresses` | IPs asignadas |

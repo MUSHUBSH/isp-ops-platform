@@ -815,6 +815,9 @@ function ResourcesView({ onReload, prefixes, sites }: { onReload: () => Promise<
     description: ""
   });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [prefixCsvDraft, setPrefixCsvDraft] = useState(defaultPrefixCsvPayload);
+  const [prefixCsvErrors, setPrefixCsvErrors] = useState<string[]>([]);
+  const [prefixImportSummary, setPrefixImportSummary] = useState("");
   const totalPrefixes = prefixes.length;
   const lacnicPrefixes = prefixes.filter((prefix) => prefix.source.toLowerCase().includes("lacnic")).length;
   const highUse = prefixes.filter((prefix) => prefix.utilization >= 80).length;
@@ -888,6 +891,33 @@ function ResourcesView({ onReload, prefixes, sites }: { onReload: () => Promise<
     }
   }
 
+  function validatePrefixImport() {
+    const errors = validatePrefixCsv(prefixCsvDraft, sites);
+    const rows = parsePrefixCsv(prefixCsvDraft);
+    setPrefixCsvErrors(errors);
+    setPrefixImportSummary(errors.length === 0 ? `${rows.length} prefijos listos para importar` : "");
+    return errors;
+  }
+
+  async function importPrefixesFromCsv() {
+    const errors = validatePrefixImport();
+    if (errors.length > 0) return;
+
+    setFormState("saving");
+    try {
+      const result = await apiPost<{ summary: { created: number; failed: number } }>("/ipam/prefixes/import", {
+        prefixes: parsePrefixCsv(prefixCsvDraft),
+        reason: "Importacion CSV prefijos desde UI"
+      });
+      await onReload();
+      setPrefixImportSummary(`Importados: ${result.summary.created} - Fallidos: ${result.summary.failed}`);
+      setFormState(result.summary.failed === 0 ? "saved" : "error");
+    } catch {
+      setPrefixImportSummary("No se pudo importar el lote de prefijos");
+      setFormState("error");
+    }
+  }
+
   return (
     <ModulePage eyebrow="ASN / LACNIC" title="Recursos de numeracion">
       <section className="metricGrid compactMetrics">
@@ -943,6 +973,28 @@ function ResourcesView({ onReload, prefixes, sites }: { onReload: () => Promise<
             <button className="dangerButton" disabled={!selectedPrefix} onClick={() => void deletePrefix()} type="button">Eliminar sin IPs</button>
             <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
           </form>
+        </div>
+        <div className="panel">
+          <div className="panelHeader"><div><p className="eyebrow">CSV</p><h2>Importar prefijos</h2></div></div>
+          <div className="importBox">
+            <textarea onChange={(event) => setPrefixCsvDraft(event.target.value)} spellCheck={false} value={prefixCsvDraft} />
+            <div className="importActions">
+              <button onClick={validatePrefixImport} type="button">Validar CSV</button>
+              <button onClick={() => void importPrefixesFromCsv()} type="button">Importar</button>
+              <button onClick={() => {
+                setPrefixCsvDraft(defaultPrefixCsvPayload);
+                setPrefixCsvErrors([]);
+                setPrefixImportSummary("");
+              }} type="button">Ejemplo</button>
+            </div>
+            <p className="importHint">Formato: prefix, family, role, status, siteCode, vrf, description. Deja siteCode vacio para GLOBAL.</p>
+            {prefixImportSummary && <p className="importHint">{prefixImportSummary}</p>}
+            {prefixCsvErrors.length > 0 && (
+              <div className="csvErrors">
+                {prefixCsvErrors.map((error) => <span key={error}>{error}</span>)}
+              </div>
+            )}
+          </div>
         </div>
       </section>
       <section className="panel">
@@ -4521,6 +4573,59 @@ function parseCsvRows(csv: string) {
     .split(/\r?\n/)
     .map((rawLine, index) => ({ cells: rawLine.split(",").map((cell) => cell.trim()), index, line: rawLine.trim() }))
     .filter((row) => row.line && !row.line.startsWith("#"));
+}
+
+const defaultPrefixCsvPayload = `# prefix,family,role,status,siteCode,vrf,description
+10.10.0.0/24,4,management,active,AQP-POP,global,Gestion Arequipa
+172.16.10.0/30,4,transport,active,MAJES,global,Transporte Majes
+2803:abcd:100::/48,6,public,planned,,global,Bloque IPv6`;
+
+function validatePrefixCsv(csv: string, sites: Site[]) {
+  const errors: string[] = [];
+  const siteCodes = new Set(sites.map((site) => site.code.toUpperCase()));
+  const rows = parseCsvRows(csv);
+
+  rows.forEach(({ cells, index }) => {
+    const row = index + 1;
+    const prefix = cells[0];
+    const family = Number(cells[1]);
+    const role = cells[2];
+    const siteCode = cells[4]?.toUpperCase();
+
+    if (!prefix || !cells[1] || !role) {
+      errors.push(`Fila ${row}: requiere prefix, family y role`);
+    }
+
+    if (prefix && !prefix.includes("/")) {
+      errors.push(`Fila ${row}: prefix debe estar en formato CIDR`);
+    }
+
+    if (cells[1] && family !== 4 && family !== 6) {
+      errors.push(`Fila ${row}: family debe ser 4 o 6`);
+    }
+
+    if (siteCode && !siteCodes.has(siteCode)) {
+      errors.push(`Fila ${row}: sede ${siteCode} no existe`);
+    }
+  });
+
+  if (rows.length === 0) {
+    errors.push("No hay filas para importar");
+  }
+
+  return errors;
+}
+
+function parsePrefixCsv(csv: string) {
+  return parseCsvRows(csv).map(({ cells }) => ({
+    prefix: cells[0],
+    family: Number(cells[1]) === 6 ? 6 : 4,
+    role: cells[2] || "customer_pool",
+    status: cells[3] || "active",
+    siteCode: cells[4] ? cells[4].toUpperCase() : null,
+    vrf: cells[5] || "global",
+    description: cells[6] || null
+  }));
 }
 
 function validateDeviceCsv(csv: string, sites: Site[]) {

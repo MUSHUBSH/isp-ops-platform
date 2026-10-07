@@ -172,14 +172,17 @@ export async function listIpAssignmentsFromDb() {
 
 export async function createPrefixInDb(input: CreatePrefixInput) {
   const row = await queryOne<PrefixRow>(
-    `WITH selected_site AS (
+    `WITH input_site AS (
+       SELECT $4::text AS code
+     ),
+     selected_site AS (
        SELECT id FROM sites WHERE code = $4
      ),
      selected_vrf AS (
        SELECT id FROM vrfs WHERE name = COALESCE($5, 'global')
      )
      INSERT INTO prefixes (site_id, vrf_id, prefix, family, role, status, description)
-     VALUES (
+     SELECT
        (SELECT id FROM selected_site),
        (SELECT id FROM selected_vrf),
        $1::cidr,
@@ -187,7 +190,8 @@ export async function createPrefixInDb(input: CreatePrefixInput) {
        $3,
        $6,
        $7
-     )
+     FROM input_site
+     WHERE input_site.code IS NULL OR EXISTS (SELECT 1 FROM selected_site)
      RETURNING
        id,
        prefix::text,
