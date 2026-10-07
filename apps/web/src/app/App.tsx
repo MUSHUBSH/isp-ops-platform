@@ -55,7 +55,8 @@ import type {
   Transceiver,
   SiteMap,
   TechnicalDocument,
-  DownstreamImpact
+  DownstreamImpact,
+  Vlan
 } from "../shared/api";
 import { apiDelete, apiGet, apiPatch, apiPost } from "../shared/api";
 import { TopologyMap } from "./TopologyMap";
@@ -208,7 +209,7 @@ export function App() {
         {activeModule === "noc" && <NocView data={data} />}
         {activeModule === "providers" && <ProvidersView contracts={data.providerContracts} onReload={data.reload} providers={data.providers} />}
         {activeModule === "resources" && <ResourcesView onReload={data.reload} prefixes={data.prefixes} sites={data.sites} />}
-        {activeModule === "ipam" && <IpamView circuits={data.circuits} interfaceLinks={data.interfaceLinks} interfaces={data.interfaces} ips={data.ips} onReload={data.reload} prefixes={data.prefixes} />}
+        {activeModule === "ipam" && <IpamView circuits={data.circuits} interfaceLinks={data.interfaceLinks} interfaces={data.interfaces} ips={data.ips} onReload={data.reload} prefixes={data.prefixes} vlans={data.vlans} />}
         {activeModule === "services" && (
           <ServicesView
             circuits={data.circuits}
@@ -970,7 +971,8 @@ function IpamView({
   interfaces,
   ips,
   onReload,
-  prefixes
+  prefixes,
+  vlans
 }: {
   circuits: Circuit[];
   interfaceLinks: InterfaceLink[];
@@ -978,6 +980,7 @@ function IpamView({
   ips: IpAssignment[];
   onReload: () => Promise<void>;
   prefixes: Prefix[];
+  vlans: Vlan[];
 }) {
   const [ipForm, setIpForm] = useState({ address: "", prefix: prefixes[0]?.prefix ?? "", interfaceId: interfaces[0]?.id ?? "", role: "management", status: "assigned", description: "" });
   const [selectedIpId, setSelectedIpId] = useState(ips[0]?.id ?? "");
@@ -992,6 +995,26 @@ function IpamView({
   const selectedIpCircuits = circuits.filter((circuit) => selectedCircuitCodes.includes(circuit.code));
   const [ipEditForm, setIpEditForm] = useState({ interfaceId: selectedIpInterfaceId, role: selectedIp?.role ?? "management", status: selectedIp?.status ?? "assigned", description: selectedIp?.description ?? "" });
   const [formState, setFormState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const siteOptions = useMemo(() => Array.from(new Set([
+    ...prefixes.map((prefix) => prefix.siteCode),
+    ...interfaces.map((networkInterface) => networkInterface.siteCode),
+    ...vlans.map((vlan) => vlan.siteCode)
+  ].filter((siteCode) => siteCode && siteCode !== "GLOBAL"))).sort(), [interfaces, prefixes, vlans]);
+  const [vlanForm, setVlanForm] = useState({ siteCode: siteOptions[0] ?? "", vlanId: "", name: "", purpose: "" });
+  const [selectedVlanId, setSelectedVlanId] = useState(vlans[0]?.id ?? "");
+  const selectedVlan = vlans.find((vlan) => vlan.id === selectedVlanId) ?? vlans[0];
+  const [vlanEditForm, setVlanEditForm] = useState({
+    siteCode: selectedVlan?.siteCode === "GLOBAL" ? "" : selectedVlan?.siteCode ?? "",
+    vlanId: selectedVlan?.vlanId ? String(selectedVlan.vlanId) : "",
+    name: selectedVlan?.name ?? "",
+    purpose: selectedVlan?.purpose ?? ""
+  });
+  const [vlanCsvDraft, setVlanCsvDraft] = useState(defaultVlanCsvPayload);
+  const [vlanCsvErrors, setVlanCsvErrors] = useState<string[]>([]);
+  const [vlanImportSummary, setVlanImportSummary] = useState("");
+  const ipsWithoutFullContext = ips.filter((ip) => !ip.device || !ip.interface || !ip.service).length;
+  const highUsePrefixes = prefixes.filter((prefix) => prefix.utilization >= 80).length;
+  const vlansWithoutInterfaces = vlans.filter((vlan) => vlan.interfaces === 0).length;
 
   useEffect(() => {
     if (selectedIp) {
@@ -1004,6 +1027,17 @@ function IpamView({
       });
     }
   }, [interfaces, selectedIp]);
+
+  useEffect(() => {
+    if (selectedVlan) {
+      setVlanEditForm({
+        siteCode: selectedVlan.siteCode === "GLOBAL" ? "" : selectedVlan.siteCode,
+        vlanId: String(selectedVlan.vlanId),
+        name: selectedVlan.name,
+        purpose: selectedVlan.purpose ?? ""
+      });
+    }
+  }, [selectedVlan]);
 
   async function createIp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1061,8 +1095,99 @@ function IpamView({
     }
   }
 
+  async function createVlan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormState("saving");
+
+    try {
+      await apiPost("/ipam/vlans", {
+        siteCode: vlanForm.siteCode || null,
+        vlanId: Number(vlanForm.vlanId),
+        name: vlanForm.name,
+        purpose: vlanForm.purpose || null,
+        reason: "Alta VLAN desde modulo IPAM"
+      });
+      setVlanForm((current) => ({ ...current, vlanId: "", name: "", purpose: "" }));
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function updateVlan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedVlan) return;
+    setFormState("saving");
+
+    try {
+      await apiPatch(`/ipam/vlans/${selectedVlan.id}`, {
+        siteCode: vlanEditForm.siteCode || null,
+        vlanId: Number(vlanEditForm.vlanId),
+        name: vlanEditForm.name,
+        purpose: vlanEditForm.purpose || null,
+        reason: "Edicion VLAN desde modulo IPAM"
+      });
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  async function deleteVlan() {
+    if (!selectedVlan) return;
+    setFormState("saving");
+
+    try {
+      await apiDelete(`/ipam/vlans/${selectedVlan.id}`);
+      setSelectedVlanId("");
+      await onReload();
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+    }
+  }
+
+  function validateVlanImport() {
+    const errors = validateVlanCsv(vlanCsvDraft, siteOptions);
+    setVlanCsvErrors(errors);
+    setVlanImportSummary(errors.length === 0 ? "CSV listo para importar." : "");
+  }
+
+  async function importVlansFromCsv() {
+    const errors = validateVlanCsv(vlanCsvDraft, siteOptions);
+    setVlanCsvErrors(errors);
+    setVlanImportSummary("");
+
+    if (errors.length > 0) return;
+
+    setFormState("saving");
+    try {
+      const payload = parseVlanCsv(vlanCsvDraft);
+      await apiPost("/ipam/vlans/import", {
+        vlans: payload,
+        reason: "Importacion CSV VLANs desde modulo IPAM"
+      });
+      await onReload();
+      setVlanImportSummary(`${payload.length} VLANs importadas.`);
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+      setVlanImportSummary("No se pudo importar el CSV.");
+    }
+  }
+
   return (
     <ModulePage eyebrow="IPAM" title="Trazabilidad por IP, prefijo e interfaz">
+      <section className="metricsGrid">
+        <Metric label="Prefijos" value={String(prefixes.length)} tone="neutral" />
+        <Metric label="IPs documentadas" value={String(ips.length)} tone="neutral" />
+        <Metric label="VLANs" value={String(vlans.length)} tone="neutral" />
+        <Metric label="IPs con deuda" value={String(ipsWithoutFullContext)} tone={ipsWithoutFullContext > 0 ? "warning" : "neutral"} />
+        <Metric label="Prefijos > 80%" value={String(highUsePrefixes)} tone={highUsePrefixes > 0 ? "warning" : "neutral"} />
+        <Metric label="VLANs sin puertos" value={String(vlansWithoutInterfaces)} tone={vlansWithoutInterfaces > 0 ? "warning" : "neutral"} />
+      </section>
       <section className="ipamWorkbench">
         <div className="panel">
           <div className="panelHeader">
@@ -1076,6 +1201,88 @@ function IpamView({
             statusColumnIndex={undefined}
             rows={prefixes.map((prefix) => [prefix.prefix, prefix.siteCode, prefix.vrf, `${prefix.utilization}%`])}
           />
+        </div>
+        <div className="panel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">VLANs</p>
+              <h2>Segmentos por sede</h2>
+            </div>
+          </div>
+          <DataTable
+            columns={["Sede", "VLAN", "Nombre", "Proposito", "Interfaces"]}
+            rows={vlans.map((vlan) => [
+              vlan.siteCode,
+              String(vlan.vlanId),
+              vlan.name,
+              vlan.purpose ?? "sin proposito",
+              String(vlan.interfaces)
+            ])}
+          />
+        </div>
+        <div className="panel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">Alta rapida</p>
+              <h2>Nueva VLAN</h2>
+            </div>
+          </div>
+          <form className="quickForm" onSubmit={createVlan}>
+            <label>Sede<select onChange={(event) => setVlanForm((current) => ({ ...current, siteCode: event.target.value }))} value={vlanForm.siteCode}>
+              <option value="">Global</option>
+              {siteOptions.map((siteCode) => <option key={siteCode} value={siteCode}>{siteCode}</option>)}
+            </select></label>
+            <label>VLAN ID<input inputMode="numeric" max="4094" min="1" onChange={(event) => setVlanForm((current) => ({ ...current, vlanId: event.target.value }))} value={vlanForm.vlanId} /></label>
+            <label className="wideField">Nombre<input onChange={(event) => setVlanForm((current) => ({ ...current, name: event.target.value }))} value={vlanForm.name} /></label>
+            <label className="wideField">Proposito<input onChange={(event) => setVlanForm((current) => ({ ...current, purpose: event.target.value }))} value={vlanForm.purpose} /></label>
+            <button disabled={!vlanForm.vlanId || !vlanForm.name} type="submit">Crear VLAN</button>
+            <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+          </form>
+        </div>
+        <div className="panel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">Operacion</p>
+              <h2>Editar VLAN</h2>
+            </div>
+          </div>
+          <form className="quickForm" onSubmit={updateVlan}>
+            <label className="wideField">VLAN<select onChange={(event) => setSelectedVlanId(event.target.value)} value={selectedVlan?.id ?? ""}>
+              <option value="">Seleccionar</option>
+              {vlans.map((vlan) => <option key={vlan.id} value={vlan.id}>{vlan.siteCode} / VLAN {vlan.vlanId} - {vlan.name}</option>)}
+            </select></label>
+            <label>Sede<select disabled={!selectedVlan} onChange={(event) => setVlanEditForm((current) => ({ ...current, siteCode: event.target.value }))} value={vlanEditForm.siteCode}>
+              <option value="">Global</option>
+              {siteOptions.map((siteCode) => <option key={siteCode} value={siteCode}>{siteCode}</option>)}
+            </select></label>
+            <label>VLAN ID<input disabled={!selectedVlan} inputMode="numeric" max="4094" min="1" onChange={(event) => setVlanEditForm((current) => ({ ...current, vlanId: event.target.value }))} value={vlanEditForm.vlanId} /></label>
+            <label className="wideField">Nombre<input disabled={!selectedVlan} onChange={(event) => setVlanEditForm((current) => ({ ...current, name: event.target.value }))} value={vlanEditForm.name} /></label>
+            <label className="wideField">Proposito<input disabled={!selectedVlan} onChange={(event) => setVlanEditForm((current) => ({ ...current, purpose: event.target.value }))} value={vlanEditForm.purpose} /></label>
+            <button disabled={!selectedVlan || !vlanEditForm.vlanId || !vlanEditForm.name} type="submit">Guardar VLAN</button>
+            <button className="dangerButton" disabled={!selectedVlan} onClick={() => void deleteVlan()} type="button">Eliminar sin interfaces</button>
+            <span className={`formState ${formState}`}>{formStateLabel(formState)}</span>
+          </form>
+        </div>
+        <div className="panel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">Carga masiva</p>
+              <h2>Importar VLANs por CSV</h2>
+            </div>
+          </div>
+          <div className="importBox">
+            <textarea onChange={(event) => setVlanCsvDraft(event.target.value)} value={vlanCsvDraft} />
+            <div className="importActions">
+              <button onClick={validateVlanImport} type="button">Validar CSV</button>
+              <button onClick={() => void importVlansFromCsv()} type="button">Importar VLANs</button>
+              <span className={`formState ${formState}`}>{vlanImportSummary || formStateLabel(formState)}</span>
+            </div>
+            {vlanCsvErrors.length > 0 && (
+              <div className="csvErrors">
+                {vlanCsvErrors.map((error) => <span key={error}>{error}</span>)}
+              </div>
+            )}
+          </div>
         </div>
         <div className="panel">
           <div className="panelHeader">
@@ -4336,6 +4543,55 @@ function parseInterfaceCsv(csv: string) {
     speedMbps: cells[4] ? Number(cells[4]) : null,
     description: cells[5] || null,
     reason: "Importacion CSV interfaces"
+  }));
+}
+
+const defaultVlanCsvPayload = `# siteCode,vlanId,name,purpose
+AQP-POP,10,Gestion AQP,Gestion routers switches OLT
+MAJES,100,Clientes Majes,Acceso clientes FTTH
+CORIRE,200,Transporte Corire,Backhaul y enlaces punto a punto`;
+
+function validateVlanCsv(csv: string, siteOptions: string[]) {
+  const errors: string[] = [];
+  const siteCodes = new Set(siteOptions.map((siteCode) => siteCode.toUpperCase()));
+  const rows = parseCsvRows(csv);
+
+  rows.forEach(({ cells, index }) => {
+    const row = index + 1;
+    const siteCode = cells[0]?.toUpperCase();
+    const vlanId = Number(cells[1]);
+    const name = cells[2];
+
+    if (!cells[1] || !name) {
+      errors.push(`Fila ${row}: requiere vlanId y name`);
+    }
+
+    if (siteCode && siteCode !== "GLOBAL" && siteCodes.size > 0 && !siteCodes.has(siteCode)) {
+      errors.push(`Fila ${row}: sede ${siteCode} no existe`);
+    }
+
+    if (cells[1] && (!Number.isInteger(vlanId) || vlanId < 1 || vlanId > 4094)) {
+      errors.push(`Fila ${row}: vlanId debe estar entre 1 y 4094`);
+    }
+
+    if (name && name.length < 2) {
+      errors.push(`Fila ${row}: nombre demasiado corto`);
+    }
+  });
+
+  if (rows.length === 0) {
+    errors.push("No hay filas para importar");
+  }
+
+  return errors;
+}
+
+function parseVlanCsv(csv: string) {
+  return parseCsvRows(csv).map(({ cells }) => ({
+    siteCode: cells[0] && cells[0].toUpperCase() !== "GLOBAL" ? cells[0].toUpperCase() : null,
+    vlanId: Number(cells[1]),
+    name: cells[2],
+    purpose: cells[3] || null
   }));
 }
 

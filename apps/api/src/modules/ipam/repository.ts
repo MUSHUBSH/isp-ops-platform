@@ -24,6 +24,15 @@ type IpRow = {
   description: string | null;
 };
 
+type VlanRow = {
+  id: string;
+  site_code: string | null;
+  vlan_id: number;
+  name: string;
+  purpose: string | null;
+  interfaces: string;
+};
+
 export type CreatePrefixInput = {
   prefix: string;
   family: 4 | 6;
@@ -60,6 +69,17 @@ export type UpdatePrefixInput = {
   description?: string | null;
 };
 
+export type CreateVlanInput = {
+  siteCode?: string | null;
+  vlanId: number;
+  name: string;
+  purpose?: string | null;
+};
+
+export type UpdateVlanInput = CreateVlanInput & {
+  id: string;
+};
+
 function mapPrefix(row: PrefixRow) {
   return {
     id: row.id,
@@ -85,6 +105,17 @@ function mapIp(row: IpRow) {
     role: row.role,
     status: row.status,
     description: row.description
+  };
+}
+
+function mapVlan(row: VlanRow) {
+  return {
+    id: row.id,
+    siteCode: row.site_code ?? "GLOBAL",
+    vlanId: row.vlan_id,
+    name: row.name,
+    purpose: row.purpose,
+    interfaces: Number(row.interfaces ?? 0)
   };
 }
 
@@ -176,6 +207,25 @@ export async function createPrefixInDb(input: CreatePrefixInput) {
   );
 
   return row ? mapPrefix(row) : null;
+}
+
+export async function listVlansFromDb() {
+  const rows = await query<VlanRow>(
+    `SELECT
+       v.id,
+       s.code AS site_code,
+       v.vlan_id,
+       v.name,
+       v.purpose,
+       COUNT(i.id) AS interfaces
+     FROM vlans v
+     LEFT JOIN sites s ON s.id = v.site_id
+     LEFT JOIN interfaces i ON i.vlan_id = v.id
+     GROUP BY v.id, s.code
+     ORDER BY s.code NULLS FIRST, v.vlan_id`
+  );
+
+  return rows?.map(mapVlan) ?? null;
 }
 
 export async function updatePrefixInDb(input: UpdatePrefixInput) {
@@ -338,6 +388,77 @@ export async function deleteIpInDb(id: string) {
        AND NOT EXISTS (SELECT 1 FROM documents WHERE object_type = 'ip_address' AND object_id = ip_addresses.id)
        AND NOT EXISTS (SELECT 1 FROM evidence_files WHERE object_type = 'ip_address' AND object_id = ip_addresses.id)
        AND NOT EXISTS (SELECT 1 FROM incident_impacts WHERE object_type = 'ip_address' AND object_id = ip_addresses.id)
+     RETURNING id`,
+    [id]
+  );
+
+  return row ?? null;
+}
+
+export async function createVlanInDb(input: CreateVlanInput) {
+  const row = await queryOne<VlanRow>(
+    `WITH input_site AS (
+       SELECT $1::text AS code
+     ),
+     selected_site AS (
+       SELECT id, code FROM sites WHERE code = $1
+     )
+     INSERT INTO vlans (site_id, vlan_id, name, purpose)
+     SELECT (SELECT id FROM selected_site), $2, $3, $4
+     FROM input_site
+     WHERE input_site.code IS NULL OR EXISTS (SELECT 1 FROM selected_site)
+     RETURNING
+       id,
+       (SELECT code FROM selected_site) AS site_code,
+       vlan_id,
+       name,
+       purpose,
+       0 AS interfaces`,
+    [input.siteCode ?? null, input.vlanId, input.name, input.purpose ?? null]
+  );
+
+  return row ? mapVlan(row) : null;
+}
+
+export async function updateVlanInDb(input: UpdateVlanInput) {
+  const row = await queryOne<VlanRow>(
+    `WITH input_site AS (
+       SELECT $2::text AS code
+     ),
+     selected_site AS (
+       SELECT id, code FROM sites WHERE code = $2
+     ),
+     updated AS (
+       UPDATE vlans
+       SET site_id = (SELECT id FROM selected_site),
+           vlan_id = $3,
+           name = $4,
+           purpose = $5
+       WHERE id::text = $1
+         AND ((SELECT code FROM input_site) IS NULL OR EXISTS (SELECT 1 FROM selected_site))
+       RETURNING *
+     )
+     SELECT
+       updated.id,
+       (SELECT code FROM selected_site) AS site_code,
+       updated.vlan_id,
+       updated.name,
+       updated.purpose,
+       COUNT(i.id) AS interfaces
+     FROM updated
+     LEFT JOIN interfaces i ON i.vlan_id = updated.id
+     GROUP BY updated.id, updated.vlan_id, updated.name, updated.purpose`,
+    [input.id, input.siteCode ?? null, input.vlanId, input.name, input.purpose ?? null]
+  );
+
+  return row ? mapVlan(row) : null;
+}
+
+export async function deleteVlanInDb(id: string) {
+  const row = await queryOne<{ id: string }>(
+    `DELETE FROM vlans
+     WHERE id::text = $1
+       AND NOT EXISTS (SELECT 1 FROM interfaces WHERE vlan_id = vlans.id)
      RETURNING id`,
     [id]
   );

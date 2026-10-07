@@ -7,12 +7,13 @@ Guia practica para cargar inventario operativo desde planillas. Las filas que em
 1. Sedes y enlaces de mapa.
 2. Equipos.
 3. Interfaces.
-4. Capacidad de proveedores.
-5. Tramos de fibra.
-6. Hilos de fibra.
-7. Transceivers.
-8. Patchcords.
-9. Activos datacenter.
+4. VLANs.
+5. Capacidad de proveedores.
+6. Tramos de fibra.
+7. Hilos de fibra.
+8. Transceivers.
+9. Patchcords.
+10. Activos datacenter.
 
 ## Mapa de sedes
 
@@ -37,6 +38,15 @@ MAJES,SW-MAJ-02,switch,planned,,SN-MAJ-002
 # deviceName,name,interfaceType,status,speedMbps,description
 RTR-AQP-02,sfp1,sfp,active,10000,Transporte hacia La Joya
 SW-MAJ-02,ether1,ethernet,planned,1000,Uplink local
+```
+
+## VLANs
+
+```csv
+# siteCode,vlanId,name,purpose
+AQP-POP,10,Gestion AQP,Gestion routers switches OLT
+MAJES,100,Clientes Majes,Acceso clientes FTTH
+CORIRE,200,Transporte Corire,Backhaul y enlaces punto a punto
 ```
 
 ## Capacidad de proveedor

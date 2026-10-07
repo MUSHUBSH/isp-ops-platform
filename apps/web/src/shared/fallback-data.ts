@@ -28,6 +28,7 @@ import type {
   ServiceRecord,
   Site,
   Transceiver,
+  Vlan,
   SiteMap,
   TechnicalDocument,
   TopologyGraph
@@ -151,6 +152,12 @@ export const fallbackIps: IpAssignment[] = [
   { id: "ip-pe-lim-loopback", address: "190.0.2.2/32", prefix: "190.0.2.0/24", device: "PE-LIMA-01", interface: "lo0", site: "LIM-CORE", service: "BGP edge", role: "loopback", status: "assigned", description: "Loopback BGP edge" },
   { id: "ip-aqp-uplink", address: "190.0.2.18/32", prefix: "190.0.2.0/24", device: "PE-AQP-01", interface: "lo0", site: "AQP-POP", service: "Regional POP", role: "loopback", status: "assigned", description: "Loopback POP regional" },
   { id: "ip-undoc-001", address: "190.0.2.210/32", prefix: "190.0.2.0/24", device: null, interface: null, site: "LIM-CORE", service: null, role: "unknown", status: "undocumented", description: "Detectada pendiente de documentar" }
+];
+
+export const fallbackVlans: Vlan[] = [
+  { id: "vlan-aqp-mgmt", siteCode: "AQP-POP", vlanId: 10, name: "Gestion AQP", purpose: "Gestion de routers, switches y OLT", interfaces: 0 },
+  { id: "vlan-maj-clientes", siteCode: "MAJES", vlanId: 100, name: "Clientes Majes", purpose: "Acceso clientes FTTH", interfaces: 0 },
+  { id: "vlan-corire-transport", siteCode: "CORIRE", vlanId: 200, name: "Transporte Corire", purpose: "Backhaul y enlaces punto a punto", interfaces: 0 }
 ];
 
 export const fallbackServices: ServiceRecord[] = [

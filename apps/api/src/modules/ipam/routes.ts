@@ -3,7 +3,20 @@ import { z } from "zod";
 import { recordAuditEvent } from "../../shared/audit-service.js";
 import { actorId, requirePermission } from "../../shared/auth.js";
 import { ipAssignments, prefixes } from "../../shared/demo-data.js";
-import { createIpInDb, createPrefixInDb, deleteIpInDb, deletePrefixInDb, listIpAssignmentsFromDb, listPrefixesFromDb, updateIpInDb, updatePrefixInDb } from "./repository.js";
+import {
+  createIpInDb,
+  createPrefixInDb,
+  createVlanInDb,
+  deleteIpInDb,
+  deletePrefixInDb,
+  deleteVlanInDb,
+  listIpAssignmentsFromDb,
+  listPrefixesFromDb,
+  listVlansFromDb,
+  updateIpInDb,
+  updatePrefixInDb,
+  updateVlanInDb
+} from "./repository.js";
 
 const createPrefixSchema = z.object({
   prefix: z.string().min(3).max(64),
@@ -42,6 +55,23 @@ const updatePrefixSchema = z.object({
   reason: z.string().max(500).nullable().optional()
 });
 
+const createVlanSchema = z.object({
+  siteCode: z.string().max(32).nullable().optional(),
+  vlanId: z.coerce.number().int().min(1).max(4094),
+  name: z.string().min(2).max(120),
+  purpose: z.string().max(500).nullable().optional(),
+  reason: z.string().max(500).nullable().optional()
+});
+
+const updateVlanSchema = createVlanSchema.omit({ reason: true }).extend({
+  reason: z.string().max(500).nullable().optional()
+});
+
+const importVlansSchema = z.object({
+  vlans: z.array(createVlanSchema).min(1).max(1000),
+  reason: z.string().max(500).nullable().optional()
+});
+
 export async function registerIpamRoutes(app: FastifyInstance) {
   app.get("/ipam/prefixes", async () => ({
     prefixes: (await listPrefixesFromDb()) ?? prefixes
@@ -49,6 +79,10 @@ export async function registerIpamRoutes(app: FastifyInstance) {
 
   app.get("/ipam/addresses", async () => ({
     addresses: (await listIpAssignmentsFromDb()) ?? ipAssignments
+  }));
+
+  app.get("/ipam/vlans", async () => ({
+    vlans: (await listVlansFromDb()) ?? []
   }));
 
   app.get("/ipam/debt", async () => {
@@ -225,6 +259,124 @@ export async function registerIpamRoutes(app: FastifyInstance) {
       objectId: deleted.id,
       beforeData: before,
       reason: "Eliminacion controlada de direccion IP"
+    });
+
+    return { deleted };
+  });
+
+  app.post("/ipam/vlans", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
+    const parsed = createVlanSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid VLAN payload", issues: parsed.error.issues });
+    }
+
+    const vlan = await createVlanInDb(parsed.data);
+
+    if (!vlan) {
+      return reply.code(503).send({ message: "PostgreSQL is required and referenced site must exist to create VLANs" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "vlan.created",
+      objectType: "vlan",
+      objectId: vlan.id,
+      afterData: vlan,
+      reason: parsed.data.reason ?? "Alta de VLAN"
+    });
+
+    return reply.code(201).send({ vlan });
+  });
+
+  app.post("/ipam/vlans/import", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
+    const parsed = importVlansSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid VLAN import payload", issues: parsed.error.issues });
+    }
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.vlans.entries()) {
+      try {
+        const vlan = await createVlanInDb(input);
+        if (!vlan) {
+          errors.push({ row: index + 1, label: `${input.siteCode ?? "GLOBAL"} VLAN ${input.vlanId}`, message: "Referenced site invalid or PostgreSQL unavailable" });
+          continue;
+        }
+
+        await recordAuditEvent({
+          actorId: actorId(request),
+          action: "vlan.imported",
+          objectType: "vlan",
+          objectId: vlan.id,
+          afterData: vlan,
+          reason: input.reason ?? parsed.data.reason ?? "Importacion masiva de VLANs"
+        });
+        created.push(vlan);
+      } catch (error) {
+        errors.push({ row: index + 1, label: `${input.siteCode ?? "GLOBAL"} VLAN ${input.vlanId}`, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({
+      summary: { requested: parsed.data.vlans.length, created: created.length, failed: errors.length },
+      vlans: created,
+      errors
+    });
+  });
+
+  app.patch("/ipam/vlans/:id", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateVlanSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid VLAN update payload", issues: parsed.error.issues });
+    }
+
+    const before = ((await listVlansFromDb()) ?? []).find((item) => item.id === id) ?? null;
+    const vlan = await updateVlanInDb({ id, ...parsed.data });
+
+    if (!vlan) {
+      return reply.code(404).send({ message: "VLAN not found or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "vlan.updated",
+      objectType: "vlan",
+      objectId: vlan.id,
+      beforeData: before,
+      afterData: vlan,
+      reason: parsed.data.reason ?? "Actualizacion de VLAN"
+    });
+
+    return { vlan };
+  });
+
+  app.delete("/ipam/vlans/:id", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const before = ((await listVlansFromDb()) ?? []).find((item) => item.id === id) ?? null;
+
+    if (!before) {
+      return reply.code(404).send({ message: "VLAN not found" });
+    }
+
+    const deleted = await deleteVlanInDb(id);
+
+    if (!deleted) {
+      return reply.code(409).send({ message: "VLAN has assigned interfaces or PostgreSQL is required" });
+    }
+
+    await recordAuditEvent({
+      actorId: actorId(request),
+      action: "vlan.deleted",
+      objectType: "vlan",
+      objectId: deleted.id,
+      beforeData: before,
+      reason: "Eliminacion controlada de VLAN"
     });
 
     return { deleted };

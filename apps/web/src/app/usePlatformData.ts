@@ -33,7 +33,8 @@ import type {
   Transceiver,
   SiteMap,
   TechnicalDocument,
-  TopologyGraph
+  TopologyGraph,
+  Vlan
 } from "../shared/api";
 import { apiGet } from "../shared/api";
 import {
@@ -68,7 +69,8 @@ import {
   fallbackSiteMap,
   fallbackSites,
   fallbackTopology,
-  fallbackTransceivers
+  fallbackTransceivers,
+  fallbackVlans
 } from "../shared/fallback-data";
 
 type PlatformDataState = {
@@ -84,6 +86,7 @@ type PlatformDataState = {
   services: ServiceRecord[];
   serviceEndpoints: ServiceEndpoint[];
   prefixes: Prefix[];
+  vlans: Vlan[];
   ips: IpAssignment[];
   circuits: Circuit[];
   datacenterAssets: DatacenterAsset[];
@@ -127,6 +130,7 @@ export function usePlatformData(): PlatformData {
     services: fallbackServices,
     serviceEndpoints: fallbackServiceEndpoints,
     prefixes: fallbackPrefixes,
+    vlans: fallbackVlans,
     ips: fallbackIps,
     circuits: fallbackCircuits,
     datacenterAssets: fallbackDatacenterAssets,
@@ -168,6 +172,7 @@ export function usePlatformData(): PlatformData {
         servicesPayload,
         serviceEndpointsPayload,
         prefixesPayload,
+        vlansPayload,
         ipsPayload,
         circuitsPayload,
         datacenterAssetsPayload,
@@ -203,6 +208,7 @@ export function usePlatformData(): PlatformData {
         apiGet<{ services: ServiceRecord[] }>("/services"),
         apiGet<{ endpoints: ServiceEndpoint[] }>("/services/endpoints"),
         apiGet<{ prefixes: Prefix[] }>("/ipam/prefixes"),
+        apiGet<{ vlans: Vlan[] }>("/ipam/vlans"),
         apiGet<{ addresses: IpAssignment[] }>("/ipam/addresses"),
         apiGet<{ circuits: Circuit[] }>("/circuits"),
         apiGet<{ assets: DatacenterAsset[] }>("/physical/datacenter-assets"),
@@ -247,6 +253,7 @@ export function usePlatformData(): PlatformData {
           services: servicesPayload.services,
           serviceEndpoints: serviceEndpointsPayload.endpoints,
           prefixes: prefixesPayload.prefixes,
+          vlans: vlansPayload.vlans,
           ips: ipsPayload.addresses,
           circuits: circuitsPayload.circuits,
           datacenterAssets: datacenterAssetsPayload.assets,

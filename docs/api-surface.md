@@ -58,6 +58,11 @@ Permiso de escritura: `ipam.write`.
 | POST | `/ipam/addresses` | Asignar IP |
 | PATCH | `/ipam/addresses/:id` | Editar asignacion IP |
 | DELETE | `/ipam/addresses/:id` | Eliminar IP sin dependencias |
+| GET | `/ipam/vlans` | VLANs por sede con conteo de interfaces |
+| POST | `/ipam/vlans` | Crear VLAN |
+| POST | `/ipam/vlans/import` | Importar VLANs por lote |
+| PATCH | `/ipam/vlans/:id` | Editar VLAN |
+| DELETE | `/ipam/vlans/:id` | Eliminar VLAN sin interfaces asociadas |
 | GET | `/ipam/debt` | Deuda documental IPAM |
 
 ## Servicios

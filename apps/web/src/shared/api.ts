@@ -257,6 +257,15 @@ export type IpAssignment = {
   description: string | null;
 };
 
+export type Vlan = {
+  id: string;
+  siteCode: string;
+  vlanId: number;
+  name: string;
+  purpose: string | null;
+  interfaces: number;
+};
+
 export type Circuit = {
   id: string;
   code: string;
