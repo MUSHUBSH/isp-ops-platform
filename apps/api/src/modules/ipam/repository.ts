@@ -49,6 +49,8 @@ export type CreateIpInput = {
   role: string;
   status?: string;
   interfaceId?: string | null;
+  deviceName?: string | null;
+  interfaceName?: string | null;
   description?: string | null;
 };
 
@@ -307,11 +309,21 @@ export async function deletePrefixInDb(id: string) {
 
 export async function createIpInDb(input: CreateIpInput) {
   const row = await queryOne<IpRow>(
-    `WITH inserted AS (
+    `WITH selected_interface AS (
+       SELECT i.id
+       FROM interfaces i
+       JOIN devices d ON d.id = i.device_id
+       WHERE ($4::uuid IS NOT NULL AND i.id = $4::uuid)
+          OR ($7::text IS NOT NULL AND $8::text IS NOT NULL AND upper(d.name) = upper($7) AND i.name = $8)
+       LIMIT 1
+     ),
+     inserted AS (
        INSERT INTO ip_addresses (prefix_id, interface_id, address, status, role, description)
-       SELECT p.id, $4::uuid, $1::inet, $2, $3, $5
+       SELECT p.id, (SELECT id FROM selected_interface), $1::inet, $2, $3, $5
        FROM prefixes p
        WHERE p.prefix = $6::cidr
+         AND ($4::uuid IS NULL OR EXISTS (SELECT 1 FROM selected_interface))
+         AND ($7::text IS NULL OR EXISTS (SELECT 1 FROM selected_interface))
        RETURNING id, prefix_id, interface_id, address, status
      )
      SELECT
@@ -337,7 +349,9 @@ export async function createIpInDb(input: CreateIpInput) {
       input.role,
       input.interfaceId ?? null,
       input.description ?? null,
-      input.prefix
+      input.prefix,
+      input.deviceName ?? null,
+      input.interfaceName ?? null
     ]
   );
 

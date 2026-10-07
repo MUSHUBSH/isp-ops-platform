@@ -1012,6 +1012,9 @@ function IpamView({
   const [vlanCsvDraft, setVlanCsvDraft] = useState(defaultVlanCsvPayload);
   const [vlanCsvErrors, setVlanCsvErrors] = useState<string[]>([]);
   const [vlanImportSummary, setVlanImportSummary] = useState("");
+  const [ipCsvDraft, setIpCsvDraft] = useState(defaultIpCsvPayload);
+  const [ipCsvErrors, setIpCsvErrors] = useState<string[]>([]);
+  const [ipImportSummary, setIpImportSummary] = useState("");
   const ipsWithoutFullContext = ips.filter((ip) => !ip.device || !ip.interface || !ip.service).length;
   const highUsePrefixes = prefixes.filter((prefix) => prefix.utilization >= 80).length;
   const vlansWithoutInterfaces = vlans.filter((vlan) => vlan.interfaces === 0).length;
@@ -1178,6 +1181,35 @@ function IpamView({
     }
   }
 
+  function validateIpImport() {
+    const errors = validateIpCsv(ipCsvDraft, prefixes, interfaces);
+    setIpCsvErrors(errors);
+    setIpImportSummary(errors.length === 0 ? "CSV listo para importar." : "");
+  }
+
+  async function importIpsFromCsv() {
+    const errors = validateIpCsv(ipCsvDraft, prefixes, interfaces);
+    setIpCsvErrors(errors);
+    setIpImportSummary("");
+
+    if (errors.length > 0) return;
+
+    setFormState("saving");
+    try {
+      const payload = parseIpCsv(ipCsvDraft);
+      await apiPost("/ipam/addresses/import", {
+        addresses: payload,
+        reason: "Importacion CSV IPAM desde modulo IPAM"
+      });
+      await onReload();
+      setIpImportSummary(`${payload.length} IPs importadas.`);
+      setFormState("saved");
+    } catch {
+      setFormState("error");
+      setIpImportSummary("No se pudo importar el CSV.");
+    }
+  }
+
   return (
     <ModulePage eyebrow="IPAM" title="Trazabilidad por IP, prefijo e interfaz">
       <section className="metricsGrid">
@@ -1337,6 +1369,27 @@ function IpamView({
               ip.status
             ])}
           />
+        </div>
+        <div className="panel">
+          <div className="panelHeader">
+            <div>
+              <p className="eyebrow">Carga masiva</p>
+              <h2>Importar IPs por CSV</h2>
+            </div>
+          </div>
+          <div className="importBox">
+            <textarea onChange={(event) => setIpCsvDraft(event.target.value)} value={ipCsvDraft} />
+            <div className="importActions">
+              <button onClick={validateIpImport} type="button">Validar CSV</button>
+              <button onClick={() => void importIpsFromCsv()} type="button">Importar IPs</button>
+              <span className={`formState ${formState}`}>{ipImportSummary || formStateLabel(formState)}</span>
+            </div>
+            {ipCsvErrors.length > 0 && (
+              <div className="csvErrors">
+                {ipCsvErrors.map((error) => <span key={error}>{error}</span>)}
+              </div>
+            )}
+          </div>
         </div>
         <div className="panel ipListPanel">
           <div className="panelHeader">
@@ -4592,6 +4645,60 @@ function parseVlanCsv(csv: string) {
     vlanId: Number(cells[1]),
     name: cells[2],
     purpose: cells[3] || null
+  }));
+}
+
+const defaultIpCsvPayload = `# address,prefix,deviceName,interfaceName,role,status,description
+10.10.0.2,10.10.0.0/24,RTR-AQP-02,sfp1,management,assigned,Gestion router Arequipa
+172.16.10.1,172.16.10.0/30,RTR-AQP-02,sfp1,transport,assigned,Transporte hacia Majes`;
+
+function validateIpCsv(csv: string, prefixes: Prefix[], interfaces: NetworkInterface[]) {
+  const errors: string[] = [];
+  const prefixSet = new Set(prefixes.map((prefix) => prefix.prefix));
+  const interfaceSet = new Set(interfaces.map((networkInterface) => `${networkInterface.device.toUpperCase()}|${networkInterface.name}`));
+  const rows = parseCsvRows(csv);
+
+  rows.forEach(({ cells, index }) => {
+    const row = index + 1;
+    const address = cells[0];
+    const prefix = cells[1];
+    const deviceName = cells[2]?.toUpperCase();
+    const interfaceName = cells[3];
+    const role = cells[4];
+
+    if (!address || !prefix || !role) {
+      errors.push(`Fila ${row}: requiere address, prefix y role`);
+    }
+
+    if (prefix && !prefixSet.has(prefix)) {
+      errors.push(`Fila ${row}: prefijo ${prefix} no existe`);
+    }
+
+    if ((deviceName && !interfaceName) || (!deviceName && interfaceName)) {
+      errors.push(`Fila ${row}: deviceName e interfaceName deben ir juntos`);
+    }
+
+    if (deviceName && interfaceName && !interfaceSet.has(`${deviceName}|${interfaceName}`)) {
+      errors.push(`Fila ${row}: interfaz ${deviceName} ${interfaceName} no existe`);
+    }
+  });
+
+  if (rows.length === 0) {
+    errors.push("No hay filas para importar");
+  }
+
+  return errors;
+}
+
+function parseIpCsv(csv: string) {
+  return parseCsvRows(csv).map(({ cells }) => ({
+    address: cells[0],
+    prefix: cells[1],
+    deviceName: cells[2] ? cells[2].toUpperCase() : null,
+    interfaceName: cells[3] || null,
+    role: cells[4] || "management",
+    status: cells[5] || "assigned",
+    description: cells[6] || null
   }));
 }
 

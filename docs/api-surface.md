@@ -56,6 +56,7 @@ Permiso de escritura: `ipam.write`.
 | DELETE | `/ipam/prefixes/:id` | Eliminar prefijo sin dependencias |
 | GET | `/ipam/addresses` | IPs asignadas |
 | POST | `/ipam/addresses` | Asignar IP |
+| POST | `/ipam/addresses/import` | Importar IPs por lote |
 | PATCH | `/ipam/addresses/:id` | Editar asignacion IP |
 | DELETE | `/ipam/addresses/:id` | Eliminar IP sin dependencias |
 | GET | `/ipam/vlans` | VLANs por sede con conteo de interfaces |

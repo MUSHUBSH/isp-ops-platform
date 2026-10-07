@@ -35,6 +35,8 @@ const createIpSchema = z.object({
   role: z.string().min(2).max(80),
   status: z.string().min(2).max(40).optional(),
   interfaceId: z.string().uuid().nullable().optional(),
+  deviceName: z.string().max(120).nullable().optional(),
+  interfaceName: z.string().max(120).nullable().optional(),
   description: z.string().max(500).nullable().optional(),
   reason: z.string().max(500).nullable().optional()
 });
@@ -69,6 +71,11 @@ const updateVlanSchema = createVlanSchema.omit({ reason: true }).extend({
 
 const importVlansSchema = z.object({
   vlans: z.array(createVlanSchema).min(1).max(1000),
+  reason: z.string().max(500).nullable().optional()
+});
+
+const importIpsSchema = z.object({
+  addresses: z.array(createIpSchema).min(1).max(2000),
   reason: z.string().max(500).nullable().optional()
 });
 
@@ -208,6 +215,45 @@ export async function registerIpamRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send({ address });
+  });
+
+  app.post("/ipam/addresses/import", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
+    const parsed = importIpsSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Invalid IP import payload", issues: parsed.error.issues });
+    }
+
+    const created = [];
+    const errors: Array<{ row: number; label: string; message: string }> = [];
+
+    for (const [index, input] of parsed.data.addresses.entries()) {
+      try {
+        const address = await createIpInDb(input);
+        if (!address) {
+          errors.push({ row: index + 1, label: input.address, message: "Prefix, interface reference or PostgreSQL unavailable" });
+          continue;
+        }
+
+        await recordAuditEvent({
+          actorId: actorId(request),
+          action: "ip.imported",
+          objectType: "ip_address",
+          objectId: address.id,
+          afterData: address,
+          reason: input.reason ?? parsed.data.reason ?? "Importacion masiva de IPs"
+        });
+        created.push(address);
+      } catch (error) {
+        errors.push({ row: index + 1, label: input.address, message: error instanceof Error ? error.message : "Unknown import error" });
+      }
+    }
+
+    return reply.code(errors.length > 0 ? 207 : 201).send({
+      summary: { requested: parsed.data.addresses.length, created: created.length, failed: errors.length },
+      addresses: created,
+      errors
+    });
   });
 
   app.patch("/ipam/addresses/:id", { preHandler: requirePermission("ipam.write") }, async (request, reply) => {
